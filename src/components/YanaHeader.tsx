@@ -1,10 +1,13 @@
 // ─────────────────────────────────────────────────────────────────────────────
 // YanaHeader — Global App Header
 // Appears on every screen post-login. Shows wordmark + store name + role badge.
+// Safe-area aware: respects device top inset (notch / status bar).
+// Touch targets: sign-out button meets 44pt minimum via hitSlop.
 // ─────────────────────────────────────────────────────────────────────────────
 
 import React from 'react';
 import { Pressable, StyleSheet, Text, View } from 'react-native';
+import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { Colors, Spacing, Typography } from '../constants/design';
 
 interface YanaHeaderProps {
@@ -14,8 +17,10 @@ interface YanaHeaderProps {
 }
 
 export function YanaHeader({ storeName, role, onSignOut }: YanaHeaderProps) {
+  const insets = useSafeAreaInsets();
+
   return (
-    <View style={styles.header}>
+    <View style={[styles.header, { paddingTop: Math.max(insets.top, 10) }]}>
       {/* Wordmark */}
       <View style={styles.left}>
         <Text style={styles.wordmark}>YANA</Text>
@@ -34,7 +39,13 @@ export function YanaHeader({ storeName, role, onSignOut }: YanaHeaderProps) {
           </View>
         )}
         {onSignOut && (
-          <Pressable onPress={onSignOut} style={styles.signOutBtn} hitSlop={12}>
+          <Pressable
+            onPress={onSignOut}
+            style={({ pressed }) => [styles.signOutBtn, { opacity: pressed ? 0.6 : 1 }]}
+            hitSlop={{ top: 12, bottom: 12, left: 12, right: 12 }}
+            accessibilityLabel="Sign out"
+            accessibilityRole="button"
+          >
             <Text style={styles.signOutText}>Sign out</Text>
           </Pressable>
         )}
@@ -52,7 +63,7 @@ const styles = StyleSheet.create({
     borderBottomWidth: 1,
     borderBottomColor: Colors.borderLight,
     paddingHorizontal: Spacing.md,
-    paddingVertical: 12,
+    paddingBottom: 12,
   },
   left: {
     flex: 1,
@@ -77,7 +88,7 @@ const styles = StyleSheet.create({
     backgroundColor: Colors.bgApp,
     borderRadius: 6,
     paddingHorizontal: 8,
-    paddingVertical: 3,
+    paddingVertical: 4,
     borderWidth: 1,
     borderColor: Colors.borderLight,
   },
@@ -86,7 +97,8 @@ const styles = StyleSheet.create({
     color: Colors.textSecondary,
   },
   signOutBtn: {
-    paddingHorizontal: 4,
+    paddingHorizontal: 6,
+    paddingVertical: 4,
   },
   signOutText: {
     ...Typography.bodySecondary,

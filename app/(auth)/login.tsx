@@ -1,6 +1,7 @@
 // ─────────────────────────────────────────────────────────────────────────────
 // Login Screen
 // Email + password auth. YANA cyan wordmark. Premium card-style form.
+// Responsive: wordmark + subtitle scale with screen width via useLayout.
 // ─────────────────────────────────────────────────────────────────────────────
 
 import { router } from 'expo-router';
@@ -17,6 +18,7 @@ import {
   View,
 } from 'react-native';
 import { Colors, Radius, Spacing, Typography } from '../../src/constants/design';
+import { useLayout } from '../../src/constants/layout';
 import { useAuthStore } from '../../src/stores/authStore';
 
 export default function LoginScreen() {
@@ -25,6 +27,7 @@ export default function LoginScreen() {
   const [showPassword, setShowPassword] = useState(false);
 
   const { signIn, isLoading, error, isAuthenticated, clearError } = useAuthStore();
+  const { fontScale, scale, isSmallPhone } = useLayout();
 
   useEffect(() => {
     if (isAuthenticated) router.replace('/(auth)/store-select');
@@ -38,19 +41,28 @@ export default function LoginScreen() {
   return (
     <SafeAreaView style={styles.safe}>
       <KeyboardAvoidingView style={{ flex: 1 }} behavior={Platform.OS === 'ios' ? 'padding' : 'height'}>
-        <ScrollView contentContainerStyle={styles.container} keyboardShouldPersistTaps="handled">
+        <ScrollView
+          contentContainerStyle={[
+            styles.container,
+            { paddingHorizontal: scale(20), paddingVertical: scale(32) },
+          ]}
+          keyboardShouldPersistTaps="handled"
+          showsVerticalScrollIndicator={false}
+        >
 
           {/* Hero */}
-          <View style={styles.hero}>
-            <Text style={styles.wordmark}>YANA</Text>
-            <Text style={styles.tagline}>OPS CENTER</Text>
-            <Text style={styles.subTagline}>Fleet Operations Platform</Text>
+          <View style={[styles.hero, { marginBottom: isSmallPhone ? Spacing.lg : Spacing.xl }]}>
+            <Text style={[styles.wordmark, { fontSize: fontScale(48) }]}>YANA</Text>
+            <Text style={[styles.tagline, { fontSize: fontScale(12) }]}>OPS CENTER</Text>
+            <Text style={[styles.subTagline, { fontSize: fontScale(13) }]}>
+              Fleet Operations Platform
+            </Text>
           </View>
 
           {/* Card */}
           <View style={styles.card}>
-            <Text style={styles.cardTitle}>Sign In</Text>
-            <Text style={styles.cardSub}>Captain & Admin access only</Text>
+            <Text style={[styles.cardTitle, { fontSize: fontScale(20) }]}>Sign In</Text>
+            <Text style={styles.cardSub}>Captain &amp; Admin access only</Text>
 
             {error && (
               <Pressable style={styles.errorBanner} onPress={clearError}>
@@ -69,6 +81,8 @@ export default function LoginScreen() {
                 keyboardType="email-address"
                 autoCapitalize="none"
                 autoCorrect={false}
+                textContentType="emailAddress"
+                accessibilityLabel="Email address"
               />
             </View>
 
@@ -83,8 +97,15 @@ export default function LoginScreen() {
                   placeholderTextColor={Colors.textSecondary}
                   secureTextEntry={!showPassword}
                   autoCapitalize="none"
+                  textContentType="password"
+                  accessibilityLabel="Password"
                 />
-                <Pressable onPress={() => setShowPassword((v) => !v)} hitSlop={12} style={styles.eyeBtn}>
+                <Pressable
+                  onPress={() => setShowPassword((v) => !v)}
+                  hitSlop={12}
+                  style={({ pressed }) => [styles.eyeBtn, { opacity: pressed ? 0.6 : 1 }]}
+                  accessibilityLabel={showPassword ? 'Hide password' : 'Show password'}
+                >
                   <Text style={styles.eyeText}>{showPassword ? '🙈' : '👁'}</Text>
                 </Pressable>
               </View>
@@ -94,6 +115,8 @@ export default function LoginScreen() {
               style={({ pressed }) => [styles.signInBtn, { opacity: isLoading || pressed ? 0.8 : 1 }]}
               onPress={handleSignIn}
               disabled={isLoading}
+              accessibilityRole="button"
+              accessibilityLabel="Sign in"
             >
               <Text style={styles.signInBtnText}>
                 {isLoading ? 'SIGNING IN...' : 'SIGN IN'}
@@ -103,7 +126,7 @@ export default function LoginScreen() {
 
           {/* Footer */}
           <Text style={styles.footer}>
-            Yana Yantron Technology Pvt. Ltd.{'\n'}Captain & Admin portal only
+            Yana Yantron Technology Pvt. Ltd.{'\n'}Captain &amp; Admin portal only
           </Text>
         </ScrollView>
       </KeyboardAvoidingView>
@@ -113,22 +136,23 @@ export default function LoginScreen() {
 
 const styles = StyleSheet.create({
   safe: { flex: 1, backgroundColor: Colors.bgApp },
-  container: { flexGrow: 1, justifyContent: 'center', paddingHorizontal: Spacing.md, paddingVertical: Spacing.xl },
+  container: { flexGrow: 1, justifyContent: 'center' },
 
-  hero: { alignItems: 'center', marginBottom: Spacing.xl },
+  hero: { alignItems: 'center' },
   wordmark: {
-    fontSize: 52, fontWeight: '900', color: Colors.brandCyan,
-    letterSpacing: 8, marginBottom: 4,
+    fontWeight: '900',
+    color: Colors.brandCyan,
+    letterSpacing: 8,
+    marginBottom: 4,
   },
   tagline: {
-    ...Typography.overline,
     color: Colors.textSecondary,
+    fontWeight: '500',
     letterSpacing: 4,
-    fontSize: 13,
   },
   subTagline: {
-    ...Typography.bodySecondary,
     color: Colors.textSecondary,
+    fontWeight: '400',
     marginTop: 4,
   },
 
@@ -144,7 +168,7 @@ const styles = StyleSheet.create({
     shadowRadius: 12,
     elevation: 4,
   },
-  cardTitle: { fontSize: 22, fontWeight: '700', color: Colors.textPrimary, marginBottom: 4 },
+  cardTitle: { fontWeight: '700', color: Colors.textPrimary, marginBottom: 4 },
   cardSub: { ...Typography.bodySecondary, color: Colors.textSecondary, marginBottom: Spacing.lg },
 
   errorBanner: {

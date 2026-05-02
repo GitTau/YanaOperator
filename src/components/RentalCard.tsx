@@ -1,232 +1,228 @@
 // ─────────────────────────────────────────────────────────────────────────────
-// RentalCard — primary operational card for Rentals screen
-// Spec: DESIGN_OPS.md §5.6
-// Shows: rider info, vehicle+battery, plan, due date, payment gate, actions
+// RentalCard v3 — matches Yana web ops design exactly
+// Full-width action buttons (DISPATCH RIDE, PAUSE & DELINK, RETURN, COLLECT CASH)
+// Clean header: avatar circle + name/phone + status/gate badges
+// Financial health bar. Asset chips for scooter/battery.
 // ─────────────────────────────────────────────────────────────────────────────
 
+import { Ionicons } from '@expo/vector-icons';
 import React, { useState } from 'react';
-import {
-  Pressable,
-  StyleSheet,
-  Text,
-  View,
-} from 'react-native';
+import { Pressable, StyleSheet, Text, View } from 'react-native';
 import { Colors, Radius, Spacing, Typography } from '../constants/design';
 import type { BookingWithDetails } from '../lib/database.types';
-import {
-  calculatePaymentGate,
-  formatCurrency,
-  maskAadhaar,
-  toNodeId,
-} from '../services/bookingService';
-import { Divider, PaymentGateBadge, StatusBadge, YanaButton } from './ui';
+import { calculatePaymentGate, formatCurrency, toNodeId } from '../services/bookingService';
+import { PaymentGateBadge, StatusBadge } from './ui';
 
 interface RentalCardProps {
-  booking: BookingWithDetails;
-  onDispatch: (booking: BookingWithDetails) => void;
-  onCollectCash: (booking: BookingWithDetails) => void;
-  onPause: (booking: BookingWithDetails) => void;
-  onReturn: (booking: BookingWithDetails) => void;
-  onSwap: (booking: BookingWithDetails) => void;
+  booking:       BookingWithDetails;
+  onDispatch:    (b: BookingWithDetails) => void;
+  onCollectCash: (b: BookingWithDetails) => void;
+  onPause:       (b: BookingWithDetails) => void;
+  onReturn:      (b: BookingWithDetails) => void;
+  onSwap:        (b: BookingWithDetails) => void;
 }
 
-export function RentalCard({
-  booking,
-  onDispatch,
-  onCollectCash,
-  onPause,
-  onReturn,
-  onSwap,
-}: RentalCardProps) {
+export function RentalCard({ booking, onDispatch, onCollectCash, onPause, onReturn, onSwap }: RentalCardProps) {
   const [financialExpanded, setFinancialExpanded] = useState(false);
 
   const gate = calculatePaymentGate(
-    booking.rental_plan,
-    booking.total_amount,
-    booking.deposit_amount,
-    booking.fines_amount,
-    booking.amount_paid,
+    booking.rental_plan, booking.total_amount,
+    booking.deposit_amount, booking.fines_amount, booking.amount_paid,
   );
 
-  const paidPctDisplay = Math.round(gate.paidPct * 100);
-  const paidColor =
-    gate.isCleared
-      ? Colors.statusActive
-      : gate.paidPct >= 0.5
-        ? Colors.amber
-        : Colors.statusOverdue;
+  const paidPct       = Math.min(gate.paidPct, 1);
+  const paidPctLabel  = `${Math.round(gate.paidPct * 100)}%`;
+  const barColor      = gate.isCleared ? Colors.statusActive : paidPct >= 0.5 ? Colors.statusWarning : Colors.statusError;
 
   const returnDue = booking.customer.end_date
-    ? new Date(booking.customer.end_date).toLocaleDateString('en-IN', {
-      day: 'numeric',
-      month: 'short',
-    })
+    ? new Date(booking.customer.end_date).toLocaleDateString('en-IN', { day: 'numeric', month: 'short' })
     : '—';
 
-  // Avatar initials
   const initials = booking.customer.name.slice(0, 2).toUpperCase();
 
+  const isOverdue = (() => {
+    if (booking.status !== 'Active') return false;
+    const end = booking.customer.end_date ? new Date(booking.customer.end_date) : null;
+    return end ? end < new Date() : false;
+  })();
+
+  const isDraft  = booking.status === 'Draft';
+  const isActive = booking.status === 'Active';
+  const isPaused = booking.status === 'Paused';
+  const isClosed = booking.status === 'Completed' || booking.status === 'Cancelled';
+
   return (
-    <View style={styles.card}>
-      {/* ── Header Row: Avatar + Name + Status Badge ────────────────────── */}
+    <View style={[styles.card, isOverdue && styles.cardOverdue]}>
+
+      {/* ── Header ───────────────────────────────────────────────────── */}
       <View style={styles.headerRow}>
         <View style={styles.avatar}>
           <Text style={styles.avatarText}>{initials}</Text>
         </View>
-        <View style={styles.headerInfo}>
-          <Text style={[Typography.bodyPrimary, styles.riderName]} numberOfLines={1}>
-            {booking.customer.name}
-          </Text>
-          <Text style={[Typography.bodySecondary, { color: Colors.textSecondary }]}>
-            {booking.customer.phone}
-          </Text>
+        <View style={styles.headerMid}>
+          <Text style={styles.riderName} numberOfLines={1}>{booking.customer.name}</Text>
+          <Text style={[Typography.caption, { color: Colors.textMuted }]}>{booking.customer.phone}</Text>
         </View>
-        <View style={styles.headerBadges}>
+        <View style={styles.headerRight}>
           <StatusBadge status={booking.status} />
-          <View style={{ marginTop: 4 }}>
-            <PaymentGateBadge isCleared={gate.isCleared} />
-          </View>
+          <View style={{ height: 4 }} />
+          <PaymentGateBadge isCleared={gate.isCleared} />
         </View>
       </View>
 
-      <Divider />
-
-      {/* ── Vehicle + Battery ────────────────────────────────────────────── */}
+      {/* ── Asset chips ──────────────────────────────────────────────── */}
       <View style={styles.assetRow}>
         <View style={styles.assetChip}>
-          <Text style={styles.assetIcon}>🛵</Text>
-          <Text style={[Typography.bodySecondary, { color: Colors.textPrimary, fontWeight: '600' }]}>
-            {booking.vehicle.plate_number}
-          </Text>
+          <Ionicons name="bicycle-outline" size={12} color={Colors.textSecondary} />
+          <Text style={styles.assetChipText}>{booking.vehicle.plate_number}</Text>
         </View>
         <View style={styles.assetChip}>
-          <Text style={styles.assetIcon}>⚡</Text>
-          <Text style={[Typography.bodySecondary, { color: Colors.textPrimary, fontWeight: '600' }]}>
-            {booking.battery.serial_number}
-          </Text>
+          <Ionicons name="battery-charging-outline" size={12} color={Colors.textSecondary} />
+          <Text style={styles.assetChipText}>{booking.battery.serial_number}</Text>
         </View>
-        <Text style={[Typography.bodySecondary, { color: Colors.textSecondary }]}>
-          NODE: {toNodeId(booking.id)}
-        </Text>
+        <Text style={[Typography.caption, { color: Colors.textMuted }]}>#{toNodeId(booking.id)}</Text>
       </View>
 
-      {/* ── Plan + Gate + Due Date ─────────────────────────────────────── */}
+      {/* ── Plan + Gate + Due date ───────────────────────────────────── */}
       <View style={styles.planRow}>
-        <View style={styles.planChip}>
-          <Text style={[Typography.badgeText, { color: Colors.textSecondary }]}>
-            {booking.rental_plan.toUpperCase()}
-          </Text>
-        </View>
         <Text style={[Typography.badgeText, { color: Colors.textSecondary }]}>
-          {booking.rental_plan === 'Weekly' ? '100%' : '50%'} PAYMENT GATE
+          {booking.rental_plan.toUpperCase()}
+        </Text>
+        <Text style={[Typography.caption, { color: Colors.textMuted }]}>
+          · {booking.rental_plan === 'Weekly' ? '100%' : '50%'} PAYMENT GATE
+        </Text>
+        <View style={{ flex: 1 }} />
+        <Text style={[Typography.caption, { color: Colors.textSecondary }]}>
+          RETURN DUE: {returnDue}
         </Text>
       </View>
 
-      <View style={styles.dueDateRow}>
-        <Text style={[Typography.bodySecondary, { color: Colors.textSecondary }]}>
-          📅 Return Due: <Text style={{ color: Colors.textPrimary, fontWeight: '600' }}>{returnDue}</Text>
+      {/* ── Financial Health ─────────────────────────────────────────── */}
+      <Pressable style={styles.financialRow} onPress={() => setFinancialExpanded(v => !v)}>
+        <Ionicons name="bar-chart-outline" size={12} color={Colors.textSecondary} />
+        <Text style={[Typography.badgeText, { color: Colors.textSecondary, marginLeft: 4 }]}>
+          FINANCIAL HEALTH
         </Text>
-      </View>
-
-      {/* ── Financial Health Expandable ────────────────────────────────── */}
-      <Pressable style={styles.financialRow} onPress={() => setFinancialExpanded((v) => !v)}>
-        <Text style={[Typography.badgeText, { color: Colors.statusActive }]}>
-          💚 FINANCIAL HEALTH
-        </Text>
-        <Text style={[Typography.badgeText, { color: paidColor, marginLeft: 'auto' }]}>
-          PAID: {paidPctDisplay}% {financialExpanded ? '▲' : '▼'}
-        </Text>
+        <View style={{ flex: 1, marginHorizontal: 10 }}>
+          <View style={styles.barTrack}>
+            <View style={[styles.barFill, { width: `${Math.min(paidPct * 100, 100)}%`, backgroundColor: barColor }]} />
+          </View>
+        </View>
+        <Text style={[Typography.badgeText, { color: barColor }]}>PAID: {paidPctLabel}</Text>
+        <Ionicons
+          name={financialExpanded ? 'chevron-up' : 'chevron-down'}
+          size={12}
+          color={Colors.textMuted}
+          style={{ marginLeft: 4 }}
+        />
       </Pressable>
 
       {financialExpanded && (
-        <View style={styles.financialExpanded}>
-          <FinancialLine label="Total Rent" amount={booking.total_amount} />
-          <FinancialLine label="Security Deposit" amount={booking.deposit_amount} />
-          <FinancialLine label="Fines" amount={booking.fines_amount} valueColor={booking.fines_amount > 0 ? Colors.statusOverdue : undefined} />
-          <FinancialLine label="Amount Paid" amount={booking.amount_paid} valueColor={Colors.statusActive} />
-          <FinancialLine
-            label={`Gate Limit (${booking.rental_plan === 'Weekly' ? '100%' : '50%'})`}
+        <View style={styles.financialDetail}>
+          <FinLine label="Base Rent" amount={booking.total_amount} />
+          <FinLine label="Deposit"   amount={booking.deposit_amount} />
+          {booking.fines_amount > 0 && (
+            <FinLine label="Fines" amount={booking.fines_amount} color={Colors.statusError} />
+          )}
+          <FinLine label="Amount Paid" amount={booking.amount_paid} color={Colors.statusActive} />
+          <FinLine
+            label={`Gate (${booking.rental_plan === 'Weekly' ? '100%' : '50%'})`}
             amount={gate.gateAmount}
-            valueColor={Colors.brandCyan}
+            color={Colors.brandTeal}
           />
         </View>
       )}
 
-      <Divider />
+      {/* ── Actions ──────────────────────────────────────────────────── */}
+      {!isClosed && (
+        <View style={styles.actionBlock}>
+          {/* Asset nav pills (small, grey) */}
+          <View style={styles.assetPillRow}>
+            <Pressable style={styles.assetPill} onPress={() => onSwap(booking)}>
+              <Ionicons name="bicycle-outline" size={13} color={Colors.textSecondary} />
+              <Text style={styles.assetPillText}>SCOOTER</Text>
+            </Pressable>
+            <Pressable style={styles.assetPill} onPress={() => onSwap(booking)}>
+              <Ionicons name="battery-charging-outline" size={13} color={Colors.textSecondary} />
+              <Text style={styles.assetPillText}>BATTERY</Text>
+            </Pressable>
+          </View>
 
-      {/* ── Action Buttons ─────────────────────────────────────────────── */}
-      <View style={styles.actions}>
-        {booking.status === 'Draft' && (
-          <YanaButton
-            label={gate.isCleared ? 'DISPATCH RIDE' : 'DISPATCH RIDE'}
-            variant={gate.isCleared ? 'primary' : 'secondary'}
-            disabled={!gate.isCleared}
-            onPress={() => onDispatch(booking)}
-          />
-        )}
+          {/* Primary ops buttons */}
+          {isDraft && (
+            <Pressable
+              style={({ pressed }) => [
+                styles.fullBtn, styles.fullBtnCyan,
+                { opacity: gate.isCleared ? (pressed ? 0.85 : 1) : 0.45 },
+              ]}
+              onPress={() => onDispatch(booking)}
+              disabled={!gate.isCleared}
+            >
+              <Ionicons name="rocket-outline" size={16} color={Colors.brandNavy} style={{ marginRight: 6 }} />
+              <Text style={[styles.fullBtnText, { color: Colors.brandNavy }]}>DISPATCH RIDE</Text>
+            </Pressable>
+          )}
 
-        {booking.status === 'Active' && (
-          <View style={styles.actionGroup}>
-            <YanaButton
-              label="⏸ PAUSE & DELINK"
-              variant="warning"
-              onPress={() => onPause(booking)}
-              style={styles.halfButton}
-            />
-            <YanaButton
-              label="✅ RETURN"
-              variant="success"
+          {isActive && (
+            <View style={styles.twoColRow}>
+              <Pressable
+                style={({ pressed }) => [styles.halfBtn, styles.halfBtnOrange, { opacity: pressed ? 0.85 : 1 }]}
+                onPress={() => onPause(booking)}
+              >
+                <Ionicons name="pause-outline" size={14} color="#FFFFFF" style={{ marginRight: 4 }} />
+                <Text style={[styles.halfBtnText, { color: '#FFFFFF' }]}>PAUSE & DELINK</Text>
+              </Pressable>
+              <Pressable
+                style={({ pressed }) => [styles.halfBtn, styles.halfBtnGreen, { opacity: pressed ? 0.85 : 1 }]}
+                onPress={() => onReturn(booking)}
+              >
+                <Ionicons name="checkmark-outline" size={14} color="#FFFFFF" style={{ marginRight: 4 }} />
+                <Text style={[styles.halfBtnText, { color: '#FFFFFF' }]}>RETURN</Text>
+              </Pressable>
+            </View>
+          )}
+
+          {isPaused && (
+            <Pressable
+              style={({ pressed }) => [styles.fullBtn, styles.halfBtnGreen, { opacity: pressed ? 0.85 : 1 }]}
               onPress={() => onReturn(booking)}
-              style={styles.halfButton}
-            />
-          </View>
-        )}
+            >
+              <Ionicons name="checkmark-outline" size={16} color="#FFFFFF" style={{ marginRight: 6 }} />
+              <Text style={[styles.fullBtnText, { color: '#FFFFFF' }]}>RETURN VEHICLE</Text>
+            </Pressable>
+          )}
 
-        {(booking.status === 'Draft' || booking.status === 'Active' || booking.status === 'Paused') && (
-          <YanaButton
-            label="💵 COLLECT CASH"
-            variant="secondary"
+          {/* Collect cash — always available for non-closed */}
+          <Pressable
+            style={({ pressed }) => [styles.fullBtn, styles.fullBtnOutline, { opacity: pressed ? 0.82 : 1 }]}
             onPress={() => onCollectCash(booking)}
-            style={styles.collectBtn}
-          />
-        )}
+          >
+            <Text style={[styles.fullBtnText, { color: Colors.textSecondary }]}>COLLECT CASH</Text>
+          </Pressable>
+        </View>
+      )}
 
-        {booking.status === 'Active' && (
-          <YanaButton
-            label="SWAP VEHICLE/BATTERY"
-            variant="ghost"
-            onPress={() => onSwap(booking)}
+      {isClosed && (
+        <View style={styles.closedRow}>
+          <Ionicons
+            name={booking.status === 'Completed' ? 'checkmark-circle-outline' : 'close-circle-outline'}
+            size={14}
+            color={booking.status === 'Completed' ? Colors.statusActive : Colors.textMuted}
           />
-        )}
-
-        {(booking.status === 'Completed' || booking.status === 'Cancelled') && (
-          <View style={styles.completedNote}>
-            <Text style={[Typography.bodySecondary, { color: Colors.textSecondary }]}>
-              {booking.status === 'Completed' ? '✅ Booking completed' : '❌ Booking cancelled'}
-              {booking.completed_at ? ` on ${new Date(booking.completed_at).toLocaleDateString('en-IN')}` : ''}
-            </Text>
-          </View>
-        )}
-      </View>
+          <Text style={[Typography.caption, { color: Colors.textSecondary, marginLeft: 4 }]}>
+            {booking.status}
+          </Text>
+        </View>
+      )}
     </View>
   );
 }
 
-function FinancialLine({
-  label,
-  amount,
-  valueColor = Colors.textPrimary,
-}: {
-  label: string;
-  amount: number;
-  valueColor?: string;
-}) {
+function FinLine({ label, amount, color = Colors.textPrimary }: { label: string; amount: number; color?: string }) {
   return (
-    <View style={styles.financialLine}>
-      <Text style={[Typography.bodySecondary, { color: Colors.textSecondary }]}>{label}</Text>
-      <Text style={[Typography.bodySecondary, { color: valueColor, fontWeight: '600' }]}>
-        {formatCurrency(amount)}
-      </Text>
+    <View style={{ flexDirection: 'row', justifyContent: 'space-between', paddingVertical: 3 }}>
+      <Text style={[Typography.caption, { color: Colors.textSecondary }]}>{label}</Text>
+      <Text style={[Typography.caption, { color, fontWeight: '700' }]}>{formatCurrency(amount)}</Text>
     </View>
   );
 }
@@ -237,116 +233,98 @@ const styles = StyleSheet.create({
     borderRadius: Radius.card,
     borderWidth: 1,
     borderColor: Colors.borderLight,
-    padding: Spacing.md,
-    marginBottom: Spacing.md,
-  },
-  headerRow: {
-    flexDirection: 'row',
-    alignItems: 'flex-start',
     marginBottom: Spacing.sm,
-    gap: Spacing.sm,
+    overflow: 'hidden',
+  },
+  cardOverdue: {
+    borderLeftWidth: 3,
+    borderLeftColor: Colors.statusError,
+  },
+
+  // Header
+  headerRow: {
+    flexDirection: 'row', alignItems: 'flex-start',
+    padding: Spacing.md, paddingBottom: Spacing.sm, gap: Spacing.sm,
   },
   avatar: {
-    width: 44,
-    height: 44,
-    borderRadius: 22,
-    backgroundColor: Colors.brandCyan,
-    alignItems: 'center',
-    justifyContent: 'center',
-    flexShrink: 0,
+    width: 44, height: 44, borderRadius: 22,
+    backgroundColor: Colors.bgApp, borderWidth: 1, borderColor: Colors.borderLight,
+    alignItems: 'center', justifyContent: 'center', flexShrink: 0,
   },
-  avatarText: {
-    color: Colors.brandNavy,
-    fontWeight: '800',
-    fontSize: 16,
-  },
-  headerInfo: {
-    flex: 1,
-    gap: 2,
-  },
-  riderName: {
-    fontWeight: '700',
-    color: Colors.textPrimary,
-    fontSize: 15,
-  },
-  headerBadges: {
-    alignItems: 'flex-end',
-    gap: 4,
-  },
+  avatarText: { fontSize: 16, fontWeight: '800', color: Colors.textSecondary },
+  headerMid:  { flex: 1, gap: 2 },
+  riderName:  { fontSize: 15, fontWeight: '700', color: Colors.textPrimary },
+  headerRight:{ alignItems: 'flex-end' },
 
+  // Assets
   assetRow: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    flexWrap: 'wrap',
-    gap: Spacing.sm,
-    marginBottom: Spacing.sm,
+    flexDirection: 'row', alignItems: 'center', flexWrap: 'wrap',
+    gap: 6, paddingHorizontal: Spacing.md, paddingBottom: Spacing.sm,
   },
   assetChip: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: 4,
-    backgroundColor: Colors.bgApp,
-    borderRadius: 6,
-    paddingHorizontal: 8,
-    paddingVertical: 4,
+    flexDirection: 'row', alignItems: 'center', gap: 4,
+    backgroundColor: Colors.bgApp, borderRadius: Radius.sm,
+    paddingHorizontal: 8, paddingVertical: 4,
+    borderWidth: 1, borderColor: Colors.borderLight,
   },
-  assetIcon: {
-    fontSize: 13,
-  },
+  assetChipText: { ...Typography.caption, color: Colors.textPrimary, fontWeight: '600' },
 
+  // Plan row
   planRow: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: Spacing.sm,
-    marginBottom: Spacing.xs,
-  },
-  planChip: {
-    borderRadius: Radius.badge,
-    borderWidth: 1,
-    borderColor: Colors.borderInput,
-    paddingHorizontal: 8,
-    paddingVertical: 3,
-  },
-  dueDateRow: {
-    marginBottom: Spacing.sm,
+    flexDirection: 'row', alignItems: 'center', gap: 4,
+    paddingHorizontal: Spacing.md, paddingBottom: Spacing.sm,
   },
 
+  // Financial health bar
   financialRow: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    paddingVertical: Spacing.xs,
-    marginBottom: Spacing.xs,
+    flexDirection: 'row', alignItems: 'center',
+    paddingHorizontal: Spacing.md, paddingVertical: 10,
+    borderTopWidth: 1, borderTopColor: Colors.borderLight,
   },
-  financialExpanded: {
-    backgroundColor: Colors.bgApp,
-    borderRadius: Radius.sm,
-    padding: Spacing.sm,
-    marginBottom: Spacing.sm,
-    gap: Spacing.xs,
+  barTrack: {
+    height: 6, borderRadius: Radius.pill,
+    backgroundColor: Colors.borderLight, overflow: 'hidden',
   },
-  financialLine: {
-    flexDirection: 'row',
-    justifyContent: 'space-between',
-    paddingVertical: 2,
+  barFill: { height: 6, borderRadius: Radius.pill },
+  financialDetail: {
+    marginHorizontal: Spacing.md, marginBottom: Spacing.sm,
+    backgroundColor: Colors.bgApp, borderRadius: Radius.sm, padding: Spacing.sm,
   },
 
-  actions: {
-    gap: Spacing.sm,
-    marginTop: Spacing.sm,
+  // Action block
+  actionBlock: {
+    borderTopWidth: 1, borderTopColor: Colors.borderLight,
+    padding: Spacing.md, paddingTop: Spacing.sm, gap: 8,
   },
-  actionGroup: {
-    flexDirection: 'row',
-    gap: Spacing.sm,
+
+  assetPillRow: { flexDirection: 'row', gap: 8 },
+  assetPill: {
+    flex: 1, flexDirection: 'row', alignItems: 'center', justifyContent: 'center',
+    gap: 5, height: 36, borderRadius: Radius.pill,
+    borderWidth: 1, borderColor: Colors.borderLight, backgroundColor: Colors.bgApp,
   },
-  halfButton: {
-    flex: 1,
+  assetPillText: { ...Typography.badgeText, color: Colors.textSecondary, fontSize: 11 },
+
+  fullBtn: {
+    flexDirection: 'row', alignItems: 'center', justifyContent: 'center',
+    height: 48, borderRadius: Radius.pill,
   },
-  collectBtn: {
-    borderWidth: 1.5,
-    borderColor: Colors.borderLight,
+  fullBtnCyan:    { backgroundColor: Colors.brandTeal },
+  fullBtnOutline: { borderWidth: 1, borderColor: Colors.borderLight, backgroundColor: 'transparent' },
+  fullBtnText:    { ...Typography.buttonPrimary, letterSpacing: 0.5 },
+
+  twoColRow: { flexDirection: 'row', gap: 8 },
+  halfBtn: {
+    flex: 1, flexDirection: 'row', alignItems: 'center', justifyContent: 'center',
+    height: 48, borderRadius: Radius.pill,
   },
-  completedNote: {
-    alignItems: 'center',
-    paddingVertical: Spacing.sm,
+  halfBtnOrange: { backgroundColor: Colors.statusWarning },
+  halfBtnGreen:  { backgroundColor: Colors.statusActive },
+  halfBtnText:   { ...Typography.buttonPrimary, fontSize: 12 },
+
+  closedRow: {
+    flexDirection: 'row', alignItems: 'center',
+    padding: Spacing.md, paddingTop: Spacing.sm,
+    borderTopWidth: 1, borderTopColor: Colors.borderLight,
   },
 });

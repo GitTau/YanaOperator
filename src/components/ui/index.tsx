@@ -1,8 +1,10 @@
 // ─────────────────────────────────────────────────────────────────────────────
-// Reusable UI Components — YanaOperator
-// All components follow DESIGN_OPS.md specs exactly.
+// Reusable UI Components — YanaOperator v2
+// Design system: Slate + Deep Teal, rounded-rectangle buttons, Ionicons only.
+// No emoji icons. Muted palette. Premium B2B ops aesthetic.
 // ─────────────────────────────────────────────────────────────────────────────
 
+import { Ionicons } from '@expo/vector-icons';
 import React from 'react';
 import {
   ActivityIndicator,
@@ -17,13 +19,15 @@ import {
 } from 'react-native';
 import { Colors, Radius, Spacing, Typography } from '../../constants/design';
 import type { BookingStatusKey } from '../../constants/design';
+import { useLayout } from '../../constants/layout';
 
 // ── YanaButton ────────────────────────────────────────────────────────────────
 interface YanaButtonProps extends PressableProps {
   label: string;
   variant?: 'primary' | 'secondary' | 'danger' | 'warning' | 'ghost' | 'success';
   loading?: boolean;
-  icon?: React.ReactNode;
+  icon?: React.ComponentProps<typeof Ionicons>['name'];
+  size?: 'sm' | 'md';
 }
 
 export function YanaButton({
@@ -31,29 +35,31 @@ export function YanaButton({
   variant = 'primary',
   loading = false,
   icon,
+  size = 'md',
   disabled,
   style,
   ...props
 }: YanaButtonProps) {
   const bg = {
-    primary: Colors.brandCyan,
+    primary:   Colors.brandTeal,
     secondary: Colors.surfaceCard,
-    danger: Colors.statusOverdue,
-    warning: Colors.statusWarning,
-    ghost: 'transparent',
-    success: Colors.statusActive,
+    danger:    Colors.statusError,
+    warning:   Colors.statusWarning,
+    ghost:     'transparent',
+    success:   Colors.statusActive,
   }[variant];
 
   const textColor = {
-    primary: Colors.brandNavy,
+    primary:   '#FFFFFF',
     secondary: Colors.textPrimary,
-    danger: '#FFFFFF',
-    warning: '#FFFFFF',
-    ghost: Colors.textSecondary,
-    success: '#FFFFFF',
+    danger:    '#FFFFFF',
+    warning:   '#FFFFFF',
+    ghost:     Colors.textSecondary,
+    success:   '#FFFFFF',
   }[variant];
 
   const isDisabled = disabled || loading;
+  const btnHeight = size === 'sm' ? 36 : 44;
 
   return (
     <Pressable
@@ -61,9 +67,13 @@ export function YanaButton({
       disabled={isDisabled}
       style={({ pressed }) => [
         styles.button,
-        { backgroundColor: bg, opacity: isDisabled ? 0.5 : pressed ? 0.88 : 1 },
+        {
+          backgroundColor: bg,
+          height: btnHeight,
+          opacity: isDisabled ? 0.45 : pressed ? 0.88 : 1,
+        },
         variant === 'secondary' && styles.buttonOutline,
-        variant === 'ghost' && { paddingHorizontal: 0 },
+        variant === 'ghost' && { paddingHorizontal: 0, height: undefined, minHeight: 36 },
         style as object,
       ]}
     >
@@ -71,8 +81,17 @@ export function YanaButton({
         <ActivityIndicator size="small" color={textColor} />
       ) : (
         <View style={styles.buttonRow}>
-          {icon && <View style={styles.buttonIcon}>{icon}</View>}
-          <Text style={[Typography.buttonPrimary, { color: textColor }]}>{label}</Text>
+          {icon && (
+            <Ionicons
+              name={icon}
+              size={size === 'sm' ? 14 : 16}
+              color={textColor}
+              style={styles.buttonIconMargin}
+            />
+          )}
+          <Text style={[Typography.buttonPrimary, { color: textColor, fontSize: size === 'sm' ? 12 : 14 }]}>
+            {label}
+          </Text>
         </View>
       )}
     </Pressable>
@@ -81,11 +100,11 @@ export function YanaButton({
 
 // ── StatusBadge ───────────────────────────────────────────────────────────────
 const BADGE_CONFIG: Record<BookingStatusKey, { bg: string; text: string }> = {
-  Draft: { bg: '#EEEEEE', text: '#616161' },
-  Active: { bg: '#E8F5E9', text: '#00C853' },
-  Paused: { bg: '#FFF8E1', text: '#FF8F00' },
-  Completed: { bg: '#E3F2FD', text: '#1565C0' },
-  Cancelled: { bg: '#FAFAFA', text: '#9E9E9E' },
+  Draft:     { bg: '#F3F4F6', text: '#6B7280' },
+  Active:    { bg: '#F0FDF4', text: '#059669' },
+  Paused:    { bg: '#FFFBEB', text: '#D97706' },
+  Completed: { bg: '#EFF6FF', text: '#2563EB' },
+  Cancelled: { bg: '#F9FAFB', text: '#9CA3AF' },
 };
 
 interface StatusBadgeProps {
@@ -106,13 +125,15 @@ export function PaymentGateBadge({ isCleared }: { isCleared: boolean }) {
   if (isCleared) {
     return (
       <View style={[styles.gateBadge, styles.gateBadgeClear]}>
-        <Text style={[Typography.badgeText, { color: Colors.statusActive }]}>✓ CLEAR</Text>
+        <Ionicons name="checkmark-circle" size={11} color={Colors.statusActive} />
+        <Text style={[Typography.badgeText, { color: Colors.statusActive, marginLeft: 3 }]}>CLEAR</Text>
       </View>
     );
   }
   return (
     <View style={[styles.gateBadge, styles.gateBadgeNotClear]}>
-      <Text style={[Typography.badgeText, { color: Colors.statusNotClear }]}>🔒 NOT CLEAR</Text>
+      <Ionicons name="lock-closed" size={11} color={Colors.statusError} />
+      <Text style={[Typography.badgeText, { color: Colors.statusError, marginLeft: 3 }]}>NOT CLEAR</Text>
     </View>
   );
 }
@@ -122,8 +143,9 @@ interface KPICardProps {
   label: string;
   value: string | number;
   valueColor?: string;
-  backgroundColor?: string;
-  icon?: React.ReactNode;
+  backgroundColor?: string;  // Coloured card background (green, pink, etc.)
+  accentColor?: string;      // Left border accent (no background)
+  icon?: React.ComponentProps<typeof Ionicons>['name'];
   onPress?: () => void;
 }
 
@@ -132,20 +154,38 @@ export function KPICard({
   value,
   valueColor = Colors.textPrimary,
   backgroundColor = Colors.surfaceCard,
+  accentColor,
   icon,
   onPress,
 }: KPICardProps) {
+  const { fontScale } = useLayout();
   return (
     <Pressable
       onPress={onPress}
       style={({ pressed }) => [
         styles.kpiCard,
         { backgroundColor, opacity: pressed && onPress ? 0.88 : 1 },
+        accentColor && !backgroundColor ? { borderLeftColor: accentColor, borderLeftWidth: 3 } : undefined,
       ]}
+      accessibilityRole={onPress ? 'button' : 'text'}
     >
-      {icon && <View style={styles.kpiIcon}>{icon}</View>}
-      <Text style={[Typography.h2Card, { color: valueColor }]}>{value}</Text>
-      <Text style={[Typography.labelCaps, styles.kpiLabel, { color: Colors.textSecondary }]}>
+      {icon && (
+        <Ionicons
+          name={icon}
+          size={18}
+          color={valueColor !== Colors.textPrimary ? valueColor : Colors.textSecondary}
+          style={styles.kpiIcon}
+        />
+      )}
+      <Text
+        style={[Typography.h2Metric, { color: valueColor, fontSize: fontScale(30) }]}
+        numberOfLines={1}
+        adjustsFontSizeToFit
+        minimumFontScale={0.7}
+      >
+        {value}
+      </Text>
+      <Text style={[Typography.labelCaps, styles.kpiLabel]}>
         {label}
       </Text>
     </Pressable>
@@ -158,12 +198,12 @@ interface ProgressBarProps {
   height?: number;
 }
 
-export function ProgressBar({ progress, height = 8 }: ProgressBarProps) {
+export function ProgressBar({ progress, height = 6 }: ProgressBarProps) {
   const clipped = Math.min(Math.max(progress, 0), 1);
 
-  let fillColor = Colors.brandCyan;
+  let fillColor = Colors.brandTeal;
   if (clipped >= 1) fillColor = Colors.statusActive;
-  else if (clipped < 0.5) fillColor = Colors.amber;
+  else if (clipped < 0.4) fillColor = Colors.statusWarning;
 
   return (
     <View style={[styles.progressTrack, { height }]}>
@@ -187,8 +227,9 @@ export function SearchBar({ placeholder = 'Search...', ...props }: SearchBarProp
     <TextInput
       {...props}
       placeholder={placeholder}
-      placeholderTextColor={Colors.textSecondary}
+      placeholderTextColor={Colors.textMuted}
       style={[styles.searchBar, props.style]}
+      accessibilityLabel={placeholder}
     />
   );
 }
@@ -208,16 +249,17 @@ interface ErrorBannerProps {
 export function ErrorBanner({ message, onRetry, onDismiss }: ErrorBannerProps) {
   return (
     <View style={styles.errorBanner}>
-      <Text style={styles.errorBannerText}>⚠ {message}</Text>
+      <Ionicons name="warning-outline" size={16} color={Colors.statusError} style={{ marginRight: 8 }} />
+      <Text style={styles.errorBannerText}>{message}</Text>
       <View style={styles.errorBannerActions}>
         {onRetry && (
-          <Pressable onPress={onRetry}>
+          <Pressable onPress={onRetry} hitSlop={8}>
             <Text style={styles.errorBannerLink}>Retry</Text>
           </Pressable>
         )}
         {onDismiss && (
-          <Pressable onPress={onDismiss} style={{ marginLeft: 12 }}>
-            <Text style={styles.errorBannerLink}>✕</Text>
+          <Pressable onPress={onDismiss} style={{ marginLeft: 12 }} hitSlop={8}>
+            <Ionicons name="close" size={14} color={Colors.statusError} />
           </Pressable>
         )}
       </View>
@@ -229,23 +271,17 @@ export function ErrorBanner({ message, onRetry, onDismiss }: ErrorBannerProps) {
 export function OfflineBanner() {
   return (
     <View style={styles.offlineBanner}>
-      <Text style={styles.offlineBannerText}>
-        📡 No connection — showing last known data
-      </Text>
+      <Ionicons name="cloud-offline-outline" size={14} color={Colors.statusWarning} style={{ marginRight: 6 }} />
+      <Text style={styles.offlineBannerText}>No connection — showing last known data</Text>
     </View>
   );
 }
 
 // ── EmptyState ────────────────────────────────────────────────────────────────
-export function EmptyState({
-  message,
-  sub,
-}: {
-  message: string;
-  sub?: string;
-}) {
+export function EmptyState({ message, sub }: { message: string; sub?: string }) {
   return (
     <View style={styles.emptyState}>
+      <Ionicons name="file-tray-outline" size={32} color={Colors.textMuted} style={{ marginBottom: 8 }} />
       <Text style={styles.emptyStateTitle}>{message}</Text>
       {sub && <Text style={styles.emptyStateSub}>{sub}</Text>}
     </View>
@@ -256,7 +292,7 @@ export function EmptyState({
 export function SectionHeader({ title, sub }: { title: string; sub?: string }) {
   return (
     <View style={styles.sectionHeader}>
-      <Text style={[Typography.overline, styles.sectionOverline]}>{sub?.toUpperCase()}</Text>
+      {sub && <Text style={[Typography.overline, styles.sectionOverline]}>{sub.toUpperCase()}</Text>}
       <Text style={[Typography.h1Screen, { color: Colors.textPrimary }]}>{title}</Text>
     </View>
   );
@@ -272,7 +308,7 @@ export function StoreLiveBadge() {
   return (
     <View style={styles.storeLive}>
       <View style={styles.storeLiveDot} />
-      <Text style={[Typography.badgeText, { color: Colors.textPrimary }]}>STORE LIVE</Text>
+      <Text style={[Typography.badgeText, { color: Colors.textSecondary }]}>LIVE</Text>
     </View>
   );
 }
@@ -282,45 +318,47 @@ export function StoreLiveBadge() {
 // ─────────────────────────────────────────────────────────────────────────────
 const styles = StyleSheet.create({
   button: {
-    height: 52,
+    minHeight: 44,
     borderRadius: Radius.button,
     alignItems: 'center',
     justifyContent: 'center',
-    paddingHorizontal: Spacing.lg,
+    paddingHorizontal: Spacing.md,
+    paddingVertical: Spacing.sm,
   },
   buttonOutline: {
-    borderWidth: 1.5,
+    borderWidth: 1,
     borderColor: Colors.borderLight,
   },
   buttonRow: {
     flexDirection: 'row',
     alignItems: 'center',
-    gap: 8,
   },
-  buttonIcon: {
-    marginRight: 4,
+  buttonIconMargin: {
+    marginRight: 6,
   },
 
   badge: {
-    paddingHorizontal: 10,
-    paddingVertical: 4,
-    borderRadius: Radius.badge,
+    paddingHorizontal: 8,
+    paddingVertical: 3,
+    borderRadius: Radius.pill,
     alignSelf: 'flex-start',
   },
   gateBadge: {
-    paddingHorizontal: 10,
-    paddingVertical: 4,
-    borderRadius: Radius.badge,
-    borderWidth: 1.5,
+    paddingHorizontal: 8,
+    paddingVertical: 3,
+    borderRadius: Radius.pill,
+    borderWidth: 1,
     alignSelf: 'flex-start',
+    flexDirection: 'row',
+    alignItems: 'center',
   },
   gateBadgeClear: {
     borderColor: Colors.statusActive,
-    backgroundColor: Colors.statusAvailableBg,
+    backgroundColor: Colors.surfaceGreen,
   },
   gateBadgeNotClear: {
-    borderColor: Colors.statusNotClear,
-    backgroundColor: Colors.overdueCardBg,
+    borderColor: Colors.statusError,
+    backgroundColor: Colors.surfaceRed,
   },
 
   kpiCard: {
@@ -329,7 +367,8 @@ const styles = StyleSheet.create({
     padding: Spacing.md,
     borderWidth: 1,
     borderColor: Colors.borderLight,
-    minHeight: 110,
+    backgroundColor: Colors.surfaceCard,
+    minHeight: 100,
   },
   kpiIcon: {
     marginBottom: Spacing.xs,
@@ -341,64 +380,66 @@ const styles = StyleSheet.create({
 
   progressTrack: {
     backgroundColor: Colors.borderLight,
-    borderRadius: 4,
+    borderRadius: Radius.pill,
     overflow: 'hidden',
     width: '100%',
   },
   progressFill: {
-    borderRadius: 4,
+    borderRadius: Radius.pill,
   },
 
   searchBar: {
-    height: 48,
+    minHeight: 44,
     backgroundColor: Colors.surfaceCard,
-    borderRadius: Radius.card,
+    borderRadius: Radius.input,
     borderWidth: 1,
-    borderColor: Colors.borderLight,
+    borderColor: Colors.borderInput,
     paddingHorizontal: Spacing.md,
     ...Typography.bodyPrimary,
     color: Colors.textPrimary,
   },
 
   skeleton: {
-    backgroundColor: '#E8E8E8',
+    backgroundColor: '#EDEEF2',
     borderRadius: Radius.card,
-    marginBottom: Spacing.md,
+    marginBottom: Spacing.sm,
   },
 
   errorBanner: {
-    backgroundColor: '#FFEBEE',
-    borderLeftWidth: 4,
-    borderLeftColor: Colors.statusOverdue,
+    backgroundColor: Colors.surfaceRed,
+    borderLeftWidth: 3,
+    borderLeftColor: Colors.statusError,
     padding: Spacing.md,
     flexDirection: 'row',
-    justifyContent: 'space-between',
     alignItems: 'center',
   },
   errorBannerText: {
-    color: Colors.statusOverdue,
+    color: Colors.statusError,
     flex: 1,
     ...Typography.bodySecondary,
   },
   errorBannerActions: {
     flexDirection: 'row',
     marginLeft: 8,
+    alignItems: 'center',
   },
   errorBannerLink: {
-    color: Colors.statusOverdue,
+    color: Colors.statusError,
     fontWeight: '700',
     fontSize: 12,
   },
 
   offlineBanner: {
-    backgroundColor: '#FFF8E1',
-    borderLeftWidth: 4,
-    borderLeftColor: Colors.amber,
+    backgroundColor: Colors.surfaceAmber,
+    borderLeftWidth: 3,
+    borderLeftColor: Colors.statusWarning,
     paddingVertical: 10,
     paddingHorizontal: Spacing.md,
+    flexDirection: 'row',
+    alignItems: 'center',
   },
   offlineBannerText: {
-    color: Colors.amber,
+    color: Colors.statusWarning,
     ...Typography.bodySecondary,
     fontWeight: '600',
   },
@@ -407,7 +448,7 @@ const styles = StyleSheet.create({
     alignItems: 'center',
     justifyContent: 'center',
     padding: Spacing.xl,
-    gap: Spacing.sm,
+    gap: 4,
   },
   emptyStateTitle: {
     ...Typography.bodyPrimary,
@@ -417,8 +458,9 @@ const styles = StyleSheet.create({
   },
   emptyStateSub: {
     ...Typography.bodySecondary,
-    color: Colors.textSecondary,
+    color: Colors.textMuted,
     textAlign: 'center',
+    marginTop: 2,
   },
 
   sectionHeader: {
@@ -438,19 +480,19 @@ const styles = StyleSheet.create({
   storeLive: {
     flexDirection: 'row',
     alignItems: 'center',
-    gap: 6,
-    paddingHorizontal: 12,
-    paddingVertical: 5,
+    gap: 5,
+    paddingHorizontal: 10,
+    paddingVertical: 4,
     backgroundColor: Colors.surfaceCard,
-    borderRadius: 8,
+    borderRadius: Radius.pill,
     borderWidth: 1,
     borderColor: Colors.borderLight,
     alignSelf: 'flex-start',
   },
   storeLiveDot: {
-    width: 8,
-    height: 8,
-    borderRadius: 4,
+    width: 7,
+    height: 7,
+    borderRadius: Radius.pill,
     backgroundColor: Colors.statusActive,
   },
 });

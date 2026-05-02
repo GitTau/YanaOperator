@@ -15,6 +15,7 @@ import {
   Text,
   View,
 } from 'react-native';
+import { Ionicons } from '@expo/vector-icons';
 import { Colors, Radius, Spacing, Typography } from '../../src/constants/design';
 import { RentalCard } from '../../src/components/RentalCard';
 import { BookRideModal } from '../../src/components/modals/BookRideModal';
@@ -106,16 +107,22 @@ export default function RentalsScreen() {
       <View style={styles.topSection}>
         {/* Screen title */}
         <View style={styles.titleRow}>
-          <View>
-            <Text style={[Typography.overline, { color: Colors.textSecondary }]}>
-              FLEET DISPATCHER & LIFECYCLE TRACKER
-            </Text>
-            <Text style={[Typography.h1Screen, { color: Colors.textPrimary }]}>Rental Center</Text>
-          </View>
-          <Pressable style={styles.bookBtn} onPress={() => setShowBookRide(true)}>
-            <Text style={styles.bookBtnText}>+ BOOK RIDE</Text>
-          </Pressable>
+          <Text style={[Typography.overline, { color: Colors.textSecondary }]}>
+            FLEET DISPATCHER & LIFECYCLE TRACKER.
+          </Text>
+          <Text style={[Typography.h1Screen, { color: Colors.textPrimary, marginTop: 2 }]}>Rental Center</Text>
         </View>
+
+        {/* Book Ride — full-width cyan pill */}
+        <Pressable
+          style={({ pressed }) => [styles.bookBtn, { opacity: pressed ? 0.88 : 1 }]}
+          onPress={() => setShowBookRide(true)}
+          accessibilityRole="button"
+          accessibilityLabel="Book a new ride"
+        >
+          <Ionicons name="add-circle-outline" size={18} color={Colors.brandNavy} style={{ marginRight: 6 }} />
+          <Text style={styles.bookBtnText}>Book Ride</Text>
+        </Pressable>
 
         {/* Search */}
         <SearchBar
@@ -226,26 +233,29 @@ export default function RentalsScreen() {
 const styles = StyleSheet.create({
   safe: { flex: 1, backgroundColor: Colors.bgApp },
   topSection: { backgroundColor: Colors.bgApp, paddingHorizontal: Spacing.md, paddingTop: Spacing.md, paddingBottom: Spacing.sm },
-  titleRow: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'flex-start', marginBottom: Spacing.md },
+  titleRow: { marginBottom: Spacing.sm },
   bookBtn: {
-    backgroundColor: Colors.brandCyan,
-    borderRadius: Radius.button,
-    paddingHorizontal: 16,
-    paddingVertical: 10,
+    backgroundColor: Colors.brandTeal,
+    borderRadius: Radius.pill,
+    height: 50,
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'center',
+    marginBottom: Spacing.sm,
   },
-  bookBtnText: { ...Typography.buttonSecondary, color: Colors.brandNavy, fontWeight: '700' },
+  bookBtnText: { ...Typography.buttonPrimary, color: Colors.brandNavy, fontWeight: '700', fontSize: 15 },
 
   boardToggle: { flexDirection: 'row', gap: 8, marginBottom: Spacing.sm },
-  boardBtn: { flex: 1, height: 36, borderRadius: Radius.button, borderWidth: 1, borderColor: Colors.borderLight, alignItems: 'center', justifyContent: 'center' },
+  boardBtn: { flex: 1, height: 36, borderRadius: Radius.pill, borderWidth: 1, borderColor: Colors.borderLight, backgroundColor: Colors.surfaceCard, alignItems: 'center', justifyContent: 'center' },
   boardBtnActive: { backgroundColor: Colors.brandNavy, borderColor: Colors.brandNavy },
-  boardBtnText: { ...Typography.badgeText, color: Colors.textSecondary },
-  boardBtnTextActive: { color: Colors.brandCyan },
+  boardBtnText: { ...Typography.badgeText, color: Colors.textSecondary, fontSize: 12 },
+  boardBtnTextActive: { color: Colors.brandTeal },
 
   chipScroll: { marginBottom: Spacing.sm },
-  chip: { paddingHorizontal: 14, paddingVertical: 7, borderRadius: Radius.button, borderWidth: 1, borderColor: Colors.borderLight, backgroundColor: Colors.surfaceCard },
-  chipActive: { backgroundColor: Colors.brandCyan, borderColor: Colors.brandCyan },
-  chipText: { ...Typography.badgeText, color: Colors.textSecondary },
-  chipTextActive: { color: Colors.brandNavy },
+  chip: { paddingHorizontal: 14, paddingVertical: 6, borderRadius: Radius.pill, borderWidth: 1, borderColor: Colors.borderLight, backgroundColor: Colors.surfaceCard },
+  chipActive: { backgroundColor: Colors.surfaceTeal, borderColor: Colors.brandTeal },
+  chipText: { ...Typography.badgeText, color: Colors.textSecondary, fontSize: 12 },
+  chipTextActive: { color: Colors.brandTeal, fontWeight: '700' },
 
   listContent: { padding: Spacing.md, paddingTop: Spacing.sm, paddingBottom: 100 },
 });

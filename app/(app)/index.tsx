@@ -1,8 +1,10 @@
 // ─────────────────────────────────────────────────────────────────────────────
-// Overview Screen — Ops Center
-// DESIGN_OPS.md §6.3: KPI cards, Rental Goal Progress, Overdue alert
+// Overview Screen — Ops Center v2
+// Layout order: KPI grid → Goal progress → Overdue alert → Live bookings
+// Premium design: no emoji icons, muted palette, clean hierarchy
 // ─────────────────────────────────────────────────────────────────────────────
 
+import { Ionicons } from '@expo/vector-icons';
 import { useQueryClient } from '@tanstack/react-query';
 import React from 'react';
 import {
@@ -14,20 +16,18 @@ import {
   Text,
   View,
 } from 'react-native';
-import { Colors, Spacing, Typography } from '../../src/constants/design';
+import { Colors, Radius, Spacing, Typography } from '../../src/constants/design';
 import {
   EmptyState,
   ErrorBanner,
   KPICard,
   ProgressBar,
-  SectionHeader,
   SkeletonCard,
   StoreLiveBadge,
 } from '../../src/components/ui';
 import { useBookings, useGlobalConfig, useVehicles, queryKeys } from '../../src/hooks/useQueries';
 import { useStoreSelectionStore } from '../../src/stores/storeSelectionStore';
-import { formatCurrency } from '../../src/services/bookingService';
-import { calculatePaymentGate } from '../../src/services/bookingService';
+import { formatCurrency, calculatePaymentGate } from '../../src/services/bookingService';
 import type { BookingWithDetails } from '../../src/lib/database.types';
 
 export default function OverviewScreen() {
@@ -47,12 +47,10 @@ export default function OverviewScreen() {
   };
 
   // ── Derived KPIs ─────────────────────────────────────────────────────────
-  const activeBookings = (bookings as BookingWithDetails[] | undefined)?.filter((b) => b.status === 'Active').length ?? 0;
-  const totalBookings = bookings?.length ?? 0;
+  const activeBookings   = (bookings as BookingWithDetails[] | undefined)?.filter((b) => b.status === 'Active').length ?? 0;
+  const totalBookings    = bookings?.length ?? 0;
+  const vehiclesIdle     = vehicles?.filter((v) => v.status === 'Available').length ?? 0;
 
-  const vehiclesIdle = vehicles?.filter((v) => v.status === 'Available').length ?? 0;
-
-  // Payments pending = sum of balance due on active + paused bookings
   const paymentsPending = (bookings as BookingWithDetails[] | undefined)
     ?.filter((b) => b.status === 'Active' || b.status === 'Paused' || b.status === 'Draft')
     .reduce((sum, b) => {
@@ -60,7 +58,6 @@ export default function OverviewScreen() {
       return sum + Math.max(0, balance);
     }, 0) ?? 0;
 
-  // Overdue = active bookings where ride end date has passed
   const today = new Date();
   const overdueBookings = (bookings as BookingWithDetails[] | undefined)?.filter((b) => {
     if (b.status !== 'Active') return false;
@@ -69,7 +66,7 @@ export default function OverviewScreen() {
   }) ?? [];
 
   const targetRentals = selectedStore?.target_rentals ?? 10;
-  const goalProgress = targetRentals > 0 ? activeBookings / targetRentals : 0;
+  const goalProgress  = targetRentals > 0 ? activeBookings / targetRentals : 0;
 
   if (!selectedStore) {
     return <EmptyState message="No store selected." sub="Go back and pick your ZAP Point." />;
@@ -81,15 +78,17 @@ export default function OverviewScreen() {
         style={styles.scroll}
         contentContainerStyle={styles.content}
         showsVerticalScrollIndicator={false}
-        refreshControl={<RefreshControl refreshing={isLoading} onRefresh={onRefresh} tintColor={Colors.brandCyan} />}
+        refreshControl={<RefreshControl refreshing={isLoading} onRefresh={onRefresh} tintColor={Colors.brandTeal} />}
       >
         {/* ── Screen Header ─────────────────────────────────────────────── */}
         <View style={styles.screenHeader}>
-          <View>
+          <View style={{ flex: 1 }}>
             <Text style={[Typography.overline, { color: Colors.textSecondary }]}>
-              ZAP POINT PERFORMANCE OVERVIEW
+              ZAP POINT PERFORMANCE
             </Text>
-            <Text style={[Typography.h1Screen, { color: Colors.textPrimary }]}>Ops Center</Text>
+            <Text style={[Typography.h1Screen, { color: Colors.textPrimary, marginTop: 2 }]}>
+              Ops Center
+            </Text>
           </View>
           <StoreLiveBadge />
         </View>
@@ -99,23 +98,35 @@ export default function OverviewScreen() {
         )}
 
         {isLoading ? (
-          <View style={{ gap: 12 }}>
-            {[1, 2, 3].map((k) => <SkeletonCard key={k} height={110} />)}
+          <View style={{ gap: 10 }}>
+            {[1, 2, 3].map((k) => <SkeletonCard key={k} height={100} />)}
           </View>
         ) : (
           <>
-            {/* ── KPI Row 1 ─────────────────────────────────────────────── */}
-            <View style={styles.kpiRow}>
+            {/* ── KPI Grid 2×2 ──────────────────────────────────────────── */}
+            <View style={styles.kpiGrid}>
               <KPICard
-                label="TOTAL BOOKINGS"
-                value={totalBookings}
-                icon={<Text style={{ fontSize: 20 }}>📋</Text>}
+                label="ACTIVE BOOKINGS"
+                value={activeBookings}
+                accentColor={Colors.brandTeal}
+                icon="bicycle-outline"
               />
               <KPICard
                 label="VEHICLES IDLE"
                 value={vehiclesIdle}
-                valueColor={Colors.textCyan}
-                icon={<Text style={{ fontSize: 20 }}>🛵</Text>}
+                accentColor={Colors.statusActive}
+                icon="car-outline"
+              />
+              <KPICard
+                label="TOTAL BOOKINGS"
+                value={totalBookings}
+                icon="document-text-outline"
+              />
+              <KPICard
+                label="PENDING (₹)"
+                value={paymentsPending > 0 ? formatCurrency(paymentsPending) : '₹0'}
+                accentColor={paymentsPending > 0 ? Colors.statusWarning : undefined}
+                icon="card-outline"
               />
             </View>
 
@@ -123,82 +134,96 @@ export default function OverviewScreen() {
             <View style={styles.goalCard}>
               <View style={styles.goalHeader}>
                 <Text style={[Typography.labelCaps, { color: Colors.textSecondary }]}>
-                  ◎ RENTAL GOAL PROGRESS
+                  RENTAL GOAL
                 </Text>
-                <View style={styles.goalBadge}>
-                  <Text style={styles.goalBadgeText}>
-                    {activeBookings} / {targetRentals} Active — {Math.round(goalProgress * 100)}%
-                  </Text>
-                </View>
+                <Text style={[Typography.badgeText, { color: Colors.textSecondary }]}>
+                  {activeBookings} / {targetRentals} · {Math.round(goalProgress * 100)}%
+                </Text>
               </View>
-              <View style={{ marginVertical: Spacing.sm }}>
-                <ProgressBar progress={goalProgress} />
+              <View style={{ marginTop: Spacing.sm }}>
+                <ProgressBar progress={goalProgress} height={6} />
               </View>
-              <Text style={[Typography.overline, { color: Colors.textSecondary, fontStyle: 'italic' }]}>
-                * TARGET DEFINED BY ADMIN CONSOLE
+              <Text style={[Typography.caption, { color: Colors.textMuted, marginTop: 8 }]}>
+                Target set by admin
               </Text>
             </View>
-
-            {/* ── KPI Row 2: Payments Pending ───────────────────────────── */}
-            <KPICard
-              label="PAYMENTS PENDING"
-              value={formatCurrency(paymentsPending)}
-              valueColor={Colors.textOrange}
-              icon={<Text style={{ fontSize: 20 }}>💰</Text>}
-            />
 
             {/* ── Overdue Alert ─────────────────────────────────────────── */}
             {overdueBookings.length > 0 && (
               <View style={styles.overdueCard}>
                 <View style={styles.overdueHeader}>
-                  <Text style={{ fontSize: 22 }}>⚠️</Text>
-                  <View style={{ flex: 1, marginLeft: 10 }}>
-                    <Text style={[Typography.labelCaps, { color: Colors.statusOverdue }]}>
-                      OVERDUE STATUS
+                  <View style={styles.overdueIconWrap}>
+                    <Ionicons name="warning-outline" size={18} color={Colors.statusError} />
+                  </View>
+                  <View style={{ flex: 1 }}>
+                    <Text style={[Typography.labelCaps, { color: Colors.statusError }]}>
+                      OVERDUE BOOKINGS
                     </Text>
-                    <Text style={styles.overdueCount}>{overdueBookings.length}</Text>
-                    <Text style={[Typography.bodySecondary, { color: Colors.statusOverdue }]}>
-                      bookings past return date
+                    <Text style={[Typography.h2Metric, { color: Colors.statusError, fontSize: 28, lineHeight: 34 }]}>
+                      {overdueBookings.length}
+                    </Text>
+                    <Text style={[Typography.caption, { color: Colors.statusError }]}>
+                      past return date
                     </Text>
                   </View>
                 </View>
                 {overdueBookings.slice(0, 3).map((b) => (
                   <View key={b.id} style={styles.overdueRow}>
-                    <Text style={[Typography.bodySecondary, { color: Colors.statusOverdue, fontWeight: '600', flex: 1 }]}>
+                    <Text style={[Typography.bodySecondary, { color: Colors.textPrimary, fontWeight: '600', flex: 1 }]}>
                       {b.customer.name}
                     </Text>
-                    <Text style={[Typography.bodySecondary, { color: Colors.statusOverdue }]}>
+                    <Text style={[Typography.bodySecondary, { color: Colors.textSecondary }]}>
                       {b.vehicle.plate_number}
                     </Text>
                   </View>
                 ))}
                 {overdueBookings.length > 3 && (
-                  <Text style={[Typography.bodySecondary, { color: Colors.statusOverdue, marginTop: 4 }]}>
-                    +{overdueBookings.length - 3} more — check Rentals tab
+                  <Text style={[Typography.caption, { color: Colors.statusError, marginTop: 6 }]}>
+                    +{overdueBookings.length - 3} more — see Rentals tab
                   </Text>
                 )}
               </View>
             )}
 
-            {/* ── Active booking list summary ───────────────────────────── */}
-            <View style={styles.activeSummary}>
-              <Text style={[Typography.labelCaps, { color: Colors.textSecondary }]}>
-                LIVE BOOKINGS — {activeBookings}
-              </Text>
-              {(bookings as BookingWithDetails[] | undefined)
-                ?.filter((b) => b.status === 'Active')
-                .slice(0, 5)
-                .map((b) => (
-                  <View key={b.id} style={styles.activeSummaryRow}>
-                    <Text style={[Typography.bodySecondary, { color: Colors.textPrimary, fontWeight: '600', flex: 1 }]}>
-                      {b.customer.name}
-                    </Text>
-                    <Text style={[Typography.bodySecondary, { color: Colors.textSecondary }]}>
-                      {b.vehicle.plate_number} · {b.rental_plan}
-                    </Text>
-                  </View>
-                ))}
-            </View>
+            {/* ── Live Bookings Summary ──────────────────────────────────── */}
+            {activeBookings > 0 && (
+              <View style={styles.liveSection}>
+                <Text style={[Typography.labelCaps, { color: Colors.textSecondary, marginBottom: Spacing.sm }]}>
+                  LIVE — {activeBookings} ACTIVE
+                </Text>
+                {(bookings as BookingWithDetails[] | undefined)
+                  ?.filter((b) => b.status === 'Active')
+                  .slice(0, 6)
+                  .map((b) => (
+                    <View key={b.id} style={styles.liveRow}>
+                      <View style={styles.liveAvatar}>
+                        <Text style={styles.liveAvatarText}>
+                          {b.customer.name.slice(0, 2).toUpperCase()}
+                        </Text>
+                      </View>
+                      <View style={{ flex: 1 }}>
+                        <Text style={[Typography.bodyPrimary, { color: Colors.textPrimary, fontWeight: '600', fontSize: 13 }]}>
+                          {b.customer.name}
+                        </Text>
+                        <Text style={[Typography.caption, { color: Colors.textSecondary }]}>
+                          {b.vehicle.plate_number} · {b.rental_plan}
+                        </Text>
+                      </View>
+                      <View style={[
+                        styles.liveStatusDot,
+                        { backgroundColor: b.status === 'Active' ? Colors.surfaceGreen : Colors.surfaceAmber },
+                      ]}>
+                        <Text style={[Typography.caption, {
+                          color: b.status === 'Active' ? Colors.statusActive : Colors.statusWarning,
+                          fontWeight: '600',
+                        }]}>
+                          {b.status.toUpperCase()}
+                        </Text>
+                      </View>
+                    </View>
+                  ))}
+              </View>
+            )}
           </>
         )}
       </ScrollView>
@@ -207,66 +232,97 @@ export default function OverviewScreen() {
 }
 
 const styles = StyleSheet.create({
-  safe: { flex: 1, backgroundColor: Colors.bgApp },
-  scroll: { flex: 1 },
+  safe:    { flex: 1, backgroundColor: Colors.bgApp },
+  scroll:  { flex: 1 },
   content: { padding: Spacing.md, gap: Spacing.md, paddingBottom: Spacing.xl },
 
   screenHeader: {
     flexDirection: 'row',
     justifyContent: 'space-between',
     alignItems: 'flex-start',
-    marginBottom: Spacing.sm,
   },
 
-  kpiRow: { flexDirection: 'row', gap: Spacing.sm },
+  kpiGrid: {
+    flexDirection: 'row',
+    flexWrap: 'wrap',
+    gap: Spacing.sm,
+  },
 
   goalCard: {
     backgroundColor: Colors.surfaceCard,
-    borderRadius: 12,
+    borderRadius: Radius.card,
     borderWidth: 1,
     borderColor: Colors.borderLight,
     padding: Spacing.md,
   },
-  goalHeader: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center' },
-  goalBadge: {
-    backgroundColor: Colors.brandNavy,
-    borderRadius: 16,
-    paddingHorizontal: 12,
-    paddingVertical: 4,
+  goalHeader: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    alignItems: 'center',
   },
-  goalBadgeText: { ...Typography.badgeText, color: Colors.brandCyan },
 
   overdueCard: {
-    backgroundColor: Colors.overdueCardBg,
-    borderRadius: 12,
-    borderWidth: 1.5,
-    borderColor: Colors.statusOverdue,
+    backgroundColor: Colors.surfaceRed,
+    borderRadius: Radius.card,
+    borderWidth: 1,
+    borderColor: '#FECACA',
     padding: Spacing.md,
     gap: Spacing.xs,
   },
-  overdueHeader: { flexDirection: 'row', alignItems: 'center', marginBottom: Spacing.sm },
-  overdueCount: { fontSize: 36, fontWeight: '800', color: Colors.statusOverdue },
+  overdueHeader: {
+    flexDirection: 'row',
+    alignItems: 'flex-start',
+    gap: Spacing.sm,
+    marginBottom: Spacing.sm,
+  },
+  overdueIconWrap: {
+    width: 36,
+    height: 36,
+    borderRadius: Radius.sm,
+    backgroundColor: '#FEE2E2',
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
   overdueRow: {
     flexDirection: 'row',
     justifyContent: 'space-between',
-    paddingVertical: 3,
+    alignItems: 'center',
+    paddingVertical: 4,
     borderTopWidth: 1,
-    borderTopColor: 'rgba(255,23,68,0.15)',
+    borderTopColor: '#FECACA',
   },
 
-  activeSummary: {
+  liveSection: {
     backgroundColor: Colors.surfaceCard,
-    borderRadius: 12,
+    borderRadius: Radius.card,
     borderWidth: 1,
     borderColor: Colors.borderLight,
     padding: Spacing.md,
-    gap: Spacing.sm,
   },
-  activeSummaryRow: {
+  liveRow: {
     flexDirection: 'row',
-    justifyContent: 'space-between',
-    paddingVertical: 4,
+    alignItems: 'center',
+    gap: Spacing.sm,
+    paddingVertical: 8,
     borderTopWidth: 1,
     borderTopColor: Colors.borderLight,
+  },
+  liveAvatar: {
+    width: 36,
+    height: 36,
+    borderRadius: Radius.sm,
+    backgroundColor: Colors.surfaceTeal,
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  liveAvatarText: {
+    fontSize: 13,
+    fontWeight: '700',
+    color: Colors.brandTeal,
+  },
+  liveStatusDot: {
+    paddingHorizontal: 8,
+    paddingVertical: 3,
+    borderRadius: Radius.pill,
   },
 });

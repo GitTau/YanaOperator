@@ -2,7 +2,7 @@
 
 YanaOS is the core operational application for Yana (Yantron Technology Pvt. Ltd.), an EV 2-wheeler fleet-as-a-service startup. 
 
-**This application is exclusively for internal use by ZAP Point Captains, Supervisors, and Admins.** It serves as the digital backbone of Yana's field operations, replacing all physical registers and manual WhatsApp updates.
+**This application is exclusively for internal use by ZAP Point Captains, Supervisors, and Admins.**
 
 ## Core Capabilities 🚀
 - **Rider Onboarding:** Full digital KYC, plan selection, and asset allocation. 
