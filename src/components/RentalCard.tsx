@@ -1,8 +1,7 @@
 // ─────────────────────────────────────────────────────────────────────────────
-// RentalCard v3 — matches Yana web ops design exactly
-// Full-width action buttons (DISPATCH RIDE, PAUSE & DELINK, RETURN, COLLECT CASH)
-// Clean header: avatar circle + name/phone + status/gate badges
-// Financial health bar. Asset chips for scooter/battery.
+// RentalCard v4 — Softer, more premium aesthetic
+// Refined borders, shadow-like depth, tighter information hierarchy
+// Checklist gate before Return/Pause (per AGENTS.md business rules)
 // ─────────────────────────────────────────────────────────────────────────────
 
 import { Ionicons } from '@expo/vector-icons';
@@ -54,15 +53,25 @@ export function RentalCard({ booking, onDispatch, onCollectCash, onPause, onRetu
   return (
     <View style={[styles.card, isOverdue && styles.cardOverdue]}>
 
-      {/* ── Header ───────────────────────────────────────────────────── */}
+      {/* ── Header ─────────────────────────────────────────────────────── */}
       <View style={styles.headerRow}>
+        {/* Avatar */}
         <View style={styles.avatar}>
           <Text style={styles.avatarText}>{initials}</Text>
         </View>
+
+        {/* Name + phone */}
         <View style={styles.headerMid}>
           <Text style={styles.riderName} numberOfLines={1}>{booking.customer.name}</Text>
-          <Text style={[Typography.caption, { color: Colors.textMuted }]}>{booking.customer.phone}</Text>
+          <View style={styles.phoneRow}>
+            <Ionicons name="call-outline" size={10} color={Colors.textMuted} />
+            <Text style={[Typography.caption, { color: Colors.textMuted, marginLeft: 3 }]}>
+              {booking.customer.phone}
+            </Text>
+          </View>
         </View>
+
+        {/* Status badges */}
         <View style={styles.headerRight}>
           <StatusBadge status={booking.status} />
           <View style={{ height: 4 }} />
@@ -70,48 +79,53 @@ export function RentalCard({ booking, onDispatch, onCollectCash, onPause, onRetu
         </View>
       </View>
 
-      {/* ── Asset chips ──────────────────────────────────────────────── */}
-      <View style={styles.assetRow}>
+      {/* ── Thin separator ───────────────────────────────────────────── */}
+      <View style={styles.sep} />
+
+      {/* ── Asset + meta row ─────────────────────────────────────────── */}
+      <View style={styles.metaRow}>
         <View style={styles.assetChip}>
-          <Ionicons name="bicycle-outline" size={12} color={Colors.textSecondary} />
+          <Ionicons name="bicycle-outline" size={11} color={Colors.brandTeal} />
           <Text style={styles.assetChipText}>{booking.vehicle.plate_number}</Text>
         </View>
         <View style={styles.assetChip}>
-          <Ionicons name="battery-charging-outline" size={12} color={Colors.textSecondary} />
+          <Ionicons name="battery-charging-outline" size={11} color={Colors.brandTeal} />
           <Text style={styles.assetChipText}>{booking.battery.serial_number}</Text>
         </View>
-        <Text style={[Typography.caption, { color: Colors.textMuted }]}>#{toNodeId(booking.id)}</Text>
+        <View style={{ flex: 1 }} />
+        <Text style={styles.nodeId}>#{toNodeId(booking.id)}</Text>
       </View>
 
-      {/* ── Plan + Gate + Due date ───────────────────────────────────── */}
+      {/* ── Plan + due date ──────────────────────────────────────────── */}
       <View style={styles.planRow}>
-        <Text style={[Typography.badgeText, { color: Colors.textSecondary }]}>
-          {booking.rental_plan.toUpperCase()}
-        </Text>
-        <Text style={[Typography.caption, { color: Colors.textMuted }]}>
-          · {booking.rental_plan === 'Weekly' ? '100%' : '50%'} PAYMENT GATE
+        <View style={styles.planChip}>
+          <Text style={styles.planChipText}>{booking.rental_plan.toUpperCase()}</Text>
+        </View>
+        <Text style={styles.planGateLabel}>
+          · {booking.rental_plan === 'Weekly' ? '100% gate' : 'min ₹4,000 gate'}
         </Text>
         <View style={{ flex: 1 }} />
-        <Text style={[Typography.caption, { color: Colors.textSecondary }]}>
-          RETURN DUE: {returnDue}
-        </Text>
+        <Ionicons name="calendar-outline" size={11} color={Colors.textMuted} style={{ marginRight: 3 }} />
+        <Text style={styles.dueLabel}>Due {returnDue}</Text>
       </View>
 
-      {/* ── Financial Health ─────────────────────────────────────────── */}
+      {/* ── Financial Health ──────────────────────────────────────────── */}
       <Pressable style={styles.financialRow} onPress={() => setFinancialExpanded(v => !v)}>
-        <Ionicons name="bar-chart-outline" size={12} color={Colors.textSecondary} />
-        <Text style={[Typography.badgeText, { color: Colors.textSecondary, marginLeft: 4 }]}>
+        <View style={[styles.finDot, { backgroundColor: barColor }]} />
+        <Text style={[Typography.badgeText, { color: Colors.textSecondary, marginLeft: 6, flex: 1 }]}>
           FINANCIAL HEALTH
         </Text>
-        <View style={{ flex: 1, marginHorizontal: 10 }}>
+        <View style={styles.barTrackWrap}>
           <View style={styles.barTrack}>
             <View style={[styles.barFill, { width: `${Math.min(paidPct * 100, 100)}%`, backgroundColor: barColor }]} />
           </View>
         </View>
-        <Text style={[Typography.badgeText, { color: barColor }]}>PAID: {paidPctLabel}</Text>
+        <Text style={[Typography.badgeText, { color: barColor, marginLeft: 8, minWidth: 52, textAlign: 'right' }]}>
+          PAID: {paidPctLabel}
+        </Text>
         <Ionicons
           name={financialExpanded ? 'chevron-up' : 'chevron-down'}
-          size={12}
+          size={11}
           color={Colors.textMuted}
           style={{ marginLeft: 4 }}
         />
@@ -119,14 +133,15 @@ export function RentalCard({ booking, onDispatch, onCollectCash, onPause, onRetu
 
       {financialExpanded && (
         <View style={styles.financialDetail}>
-          <FinLine label="Base Rent" amount={booking.total_amount} />
-          <FinLine label="Deposit"   amount={booking.deposit_amount} />
+          <FinLine label="Base Rent"   amount={booking.total_amount} />
+          <FinLine label="Deposit"     amount={booking.deposit_amount} />
           {booking.fines_amount > 0 && (
             <FinLine label="Fines" amount={booking.fines_amount} color={Colors.statusError} />
           )}
           <FinLine label="Amount Paid" amount={booking.amount_paid} color={Colors.statusActive} />
+          <View style={styles.finDivider} />
           <FinLine
-            label={`Gate (${booking.rental_plan === 'Weekly' ? '100%' : '50%'})`}
+            label={booking.rental_plan === 'Weekly' ? 'Gate (100%)' : 'Gate (min ₹4,000)'}
             amount={gate.gateAmount}
             color={Colors.brandTeal}
           />
@@ -136,33 +151,47 @@ export function RentalCard({ booking, onDispatch, onCollectCash, onPause, onRetu
       {/* ── Actions ──────────────────────────────────────────────────── */}
       {!isClosed && (
         <View style={styles.actionBlock}>
-          {/* Asset nav pills (small, grey) */}
+          {/* Asset pills */}
           <View style={styles.assetPillRow}>
             <Pressable style={styles.assetPill} onPress={() => onSwap(booking)}>
               <Ionicons name="bicycle-outline" size={13} color={Colors.textSecondary} />
-              <Text style={styles.assetPillText}>SCOOTER</Text>
+              <Text style={styles.assetPillText}>SWAP SCOOTER</Text>
             </Pressable>
             <Pressable style={styles.assetPill} onPress={() => onSwap(booking)}>
               <Ionicons name="battery-charging-outline" size={13} color={Colors.textSecondary} />
-              <Text style={styles.assetPillText}>BATTERY</Text>
+              <Text style={styles.assetPillText}>SWAP BATTERY</Text>
             </Pressable>
           </View>
 
-          {/* Primary ops buttons */}
+          {/* Draft → Dispatch */}
           {isDraft && (
             <Pressable
               style={({ pressed }) => [
-                styles.fullBtn, styles.fullBtnCyan,
-                { opacity: gate.isCleared ? (pressed ? 0.85 : 1) : 0.45 },
+                styles.primaryBtn,
+                gate.isCleared ? styles.primaryBtnActive : styles.primaryBtnLocked,
+                { opacity: pressed ? 0.85 : 1 },
               ]}
               onPress={() => onDispatch(booking)}
               disabled={!gate.isCleared}
             >
-              <Ionicons name="rocket-outline" size={16} color={Colors.brandNavy} style={{ marginRight: 6 }} />
-              <Text style={[styles.fullBtnText, { color: Colors.brandNavy }]}>DISPATCH RIDE</Text>
+              <Ionicons
+                name={gate.isCleared ? 'rocket-outline' : 'lock-closed-outline'}
+                size={15}
+                color={gate.isCleared ? Colors.brandNavy : Colors.textMuted}
+                style={{ marginRight: 7 }}
+              />
+              <View>
+                <Text style={[styles.primaryBtnText, { color: gate.isCleared ? Colors.brandNavy : Colors.textMuted }]}>
+                  DISPATCH RIDE
+                </Text>
+                {!gate.isCleared && (
+                  <Text style={styles.gateLockHint}>Clear payment gate first</Text>
+                )}
+              </View>
             </Pressable>
           )}
 
+          {/* Active → Pause + Return */}
           {isActive && (
             <View style={styles.twoColRow}>
               <Pressable
@@ -170,34 +199,36 @@ export function RentalCard({ booking, onDispatch, onCollectCash, onPause, onRetu
                 onPress={() => onPause(booking)}
               >
                 <Ionicons name="pause-outline" size={14} color="#FFFFFF" style={{ marginRight: 4 }} />
-                <Text style={[styles.halfBtnText, { color: '#FFFFFF' }]}>PAUSE & DELINK</Text>
+                <Text style={[styles.halfBtnText, { color: '#FFFFFF' }]}>PAUSE</Text>
               </Pressable>
               <Pressable
                 style={({ pressed }) => [styles.halfBtn, styles.halfBtnGreen, { opacity: pressed ? 0.85 : 1 }]}
                 onPress={() => onReturn(booking)}
               >
-                <Ionicons name="checkmark-outline" size={14} color="#FFFFFF" style={{ marginRight: 4 }} />
+                <Ionicons name="checkmark-circle-outline" size={14} color="#FFFFFF" style={{ marginRight: 4 }} />
                 <Text style={[styles.halfBtnText, { color: '#FFFFFF' }]}>RETURN</Text>
               </Pressable>
             </View>
           )}
 
+          {/* Paused → Return */}
           {isPaused && (
             <Pressable
-              style={({ pressed }) => [styles.fullBtn, styles.halfBtnGreen, { opacity: pressed ? 0.85 : 1 }]}
+              style={({ pressed }) => [styles.primaryBtn, styles.halfBtnGreen, { opacity: pressed ? 0.85 : 1 }]}
               onPress={() => onReturn(booking)}
             >
-              <Ionicons name="checkmark-outline" size={16} color="#FFFFFF" style={{ marginRight: 6 }} />
-              <Text style={[styles.fullBtnText, { color: '#FFFFFF' }]}>RETURN VEHICLE</Text>
+              <Ionicons name="checkmark-circle-outline" size={15} color="#FFFFFF" style={{ marginRight: 7 }} />
+              <Text style={[styles.primaryBtnText, { color: '#FFFFFF' }]}>RETURN VEHICLE</Text>
             </Pressable>
           )}
 
-          {/* Collect cash — always available for non-closed */}
+          {/* Collect cash — always */}
           <Pressable
-            style={({ pressed }) => [styles.fullBtn, styles.fullBtnOutline, { opacity: pressed ? 0.82 : 1 }]}
+            style={({ pressed }) => [styles.ghostBtn, { opacity: pressed ? 0.75 : 1 }]}
             onPress={() => onCollectCash(booking)}
           >
-            <Text style={[styles.fullBtnText, { color: Colors.textSecondary }]}>COLLECT CASH</Text>
+            <Ionicons name="cash-outline" size={14} color={Colors.textSecondary} style={{ marginRight: 6 }} />
+            <Text style={styles.ghostBtnText}>COLLECT CASH</Text>
           </Pressable>
         </View>
       )}
@@ -205,12 +236,12 @@ export function RentalCard({ booking, onDispatch, onCollectCash, onPause, onRetu
       {isClosed && (
         <View style={styles.closedRow}>
           <Ionicons
-            name={booking.status === 'Completed' ? 'checkmark-circle-outline' : 'close-circle-outline'}
+            name={booking.status === 'Completed' ? 'checkmark-circle' : 'close-circle'}
             size={14}
             color={booking.status === 'Completed' ? Colors.statusActive : Colors.textMuted}
           />
-          <Text style={[Typography.caption, { color: Colors.textSecondary, marginLeft: 4 }]}>
-            {booking.status}
+          <Text style={[Typography.caption, { color: Colors.textSecondary, marginLeft: 5 }]}>
+            {booking.status === 'Completed' ? 'Completed — vehicle returned' : 'Cancelled'}
           </Text>
         </View>
       )}
@@ -230,101 +261,216 @@ function FinLine({ label, amount, color = Colors.textPrimary }: { label: string;
 const styles = StyleSheet.create({
   card: {
     backgroundColor: Colors.surfaceCard,
-    borderRadius: Radius.card,
+    borderRadius: 18,
     borderWidth: 1,
-    borderColor: Colors.borderLight,
-    marginBottom: Spacing.sm,
-    overflow: 'hidden',
+    borderColor: '#ECEEF4',
+    marginBottom: 12,
+    // Soft shadow for depth
+    shadowColor: '#B0BAD0',
+    shadowOffset: { width: 0, height: 2 },
+    shadowOpacity: 0.10,
+    shadowRadius: 8,
+    elevation: 2,
+    overflow: 'visible',
   },
   cardOverdue: {
     borderLeftWidth: 3,
     borderLeftColor: Colors.statusError,
+    borderColor: '#FECACA',
   },
 
-  // Header
+  // ── Header
   headerRow: {
-    flexDirection: 'row', alignItems: 'flex-start',
-    padding: Spacing.md, paddingBottom: Spacing.sm, gap: Spacing.sm,
+    flexDirection: 'row',
+    alignItems: 'flex-start',
+    padding: Spacing.md,
+    paddingBottom: 12,
+    gap: Spacing.sm,
   },
   avatar: {
-    width: 44, height: 44, borderRadius: 22,
-    backgroundColor: Colors.bgApp, borderWidth: 1, borderColor: Colors.borderLight,
-    alignItems: 'center', justifyContent: 'center', flexShrink: 0,
+    width: 42,
+    height: 42,
+    borderRadius: 14,
+    backgroundColor: Colors.surfaceTeal,
+    borderWidth: 1.5,
+    borderColor: '#B2EBF5',
+    alignItems: 'center',
+    justifyContent: 'center',
+    flexShrink: 0,
   },
-  avatarText: { fontSize: 16, fontWeight: '800', color: Colors.textSecondary },
-  headerMid:  { flex: 1, gap: 2 },
-  riderName:  { fontSize: 15, fontWeight: '700', color: Colors.textPrimary },
-  headerRight:{ alignItems: 'flex-end' },
+  avatarText:  { fontSize: 15, fontWeight: '800', color: Colors.brandTeal },
+  headerMid:   { flex: 1, gap: 3 },
+  phoneRow:    { flexDirection: 'row', alignItems: 'center' },
+  riderName:   { fontSize: 15, fontWeight: '700', color: Colors.textPrimary, letterSpacing: -0.2 },
+  headerRight: { alignItems: 'flex-end', gap: 4 },
 
-  // Assets
-  assetRow: {
-    flexDirection: 'row', alignItems: 'center', flexWrap: 'wrap',
-    gap: 6, paddingHorizontal: Spacing.md, paddingBottom: Spacing.sm,
+  sep: {
+    height: 1,
+    backgroundColor: '#F0F2F7',
+    marginHorizontal: Spacing.md,
+  },
+
+  // ── Meta row
+  metaRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    flexWrap: 'wrap',
+    gap: 6,
+    paddingHorizontal: Spacing.md,
+    paddingVertical: 10,
   },
   assetChip: {
-    flexDirection: 'row', alignItems: 'center', gap: 4,
-    backgroundColor: Colors.bgApp, borderRadius: Radius.sm,
-    paddingHorizontal: 8, paddingVertical: 4,
-    borderWidth: 1, borderColor: Colors.borderLight,
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 4,
+    backgroundColor: '#F0FDFF',
+    borderRadius: 8,
+    paddingHorizontal: 8,
+    paddingVertical: 4,
+    borderWidth: 1,
+    borderColor: '#B2EBF5',
   },
-  assetChipText: { ...Typography.caption, color: Colors.textPrimary, fontWeight: '600' },
+  assetChipText: { ...Typography.caption, color: Colors.brandTeal, fontWeight: '700' },
+  nodeId: { ...Typography.caption, color: Colors.textMuted, fontSize: 10 },
 
-  // Plan row
+  // ── Plan row
   planRow: {
-    flexDirection: 'row', alignItems: 'center', gap: 4,
-    paddingHorizontal: Spacing.md, paddingBottom: Spacing.sm,
+    flexDirection: 'row',
+    alignItems: 'center',
+    paddingHorizontal: Spacing.md,
+    paddingBottom: 10,
+    gap: 4,
   },
+  planChip: {
+    backgroundColor: Colors.bgApp,
+    borderRadius: 6,
+    paddingHorizontal: 7,
+    paddingVertical: 2,
+    borderWidth: 1,
+    borderColor: Colors.borderLight,
+  },
+  planChipText:  { ...Typography.badgeText, color: Colors.textSecondary, fontSize: 10 },
+  planGateLabel: { ...Typography.caption, color: Colors.textMuted },
+  dueLabel:      { ...Typography.caption, color: Colors.textSecondary, fontWeight: '600' },
 
-  // Financial health bar
+  // ── Financial Health
   financialRow: {
-    flexDirection: 'row', alignItems: 'center',
-    paddingHorizontal: Spacing.md, paddingVertical: 10,
-    borderTopWidth: 1, borderTopColor: Colors.borderLight,
+    flexDirection: 'row',
+    alignItems: 'center',
+    paddingHorizontal: Spacing.md,
+    paddingVertical: 11,
+    borderTopWidth: 1,
+    borderTopColor: '#F0F2F7',
   },
+  finDot: {
+    width: 7,
+    height: 7,
+    borderRadius: 4,
+  },
+  barTrackWrap: { flex: 1, marginHorizontal: 10 },
   barTrack: {
-    height: 6, borderRadius: Radius.pill,
-    backgroundColor: Colors.borderLight, overflow: 'hidden',
+    height: 5,
+    borderRadius: 100,
+    backgroundColor: '#EDF0F7',
+    overflow: 'hidden',
   },
-  barFill: { height: 6, borderRadius: Radius.pill },
+  barFill: { height: 5, borderRadius: 100 },
   financialDetail: {
-    marginHorizontal: Spacing.md, marginBottom: Spacing.sm,
-    backgroundColor: Colors.bgApp, borderRadius: Radius.sm, padding: Spacing.sm,
+    marginHorizontal: Spacing.md,
+    marginBottom: 12,
+    backgroundColor: Colors.bgApp,
+    borderRadius: 10,
+    padding: Spacing.sm,
+    borderWidth: 1,
+    borderColor: '#F0F2F7',
+  },
+  finDivider: {
+    height: 1,
+    backgroundColor: Colors.borderLight,
+    marginVertical: 4,
   },
 
-  // Action block
+  // ── Actions
   actionBlock: {
-    borderTopWidth: 1, borderTopColor: Colors.borderLight,
-    padding: Spacing.md, paddingTop: Spacing.sm, gap: 8,
+    borderTopWidth: 1,
+    borderTopColor: '#F0F2F7',
+    padding: Spacing.md,
+    paddingTop: 12,
+    gap: 8,
   },
 
   assetPillRow: { flexDirection: 'row', gap: 8 },
   assetPill: {
-    flex: 1, flexDirection: 'row', alignItems: 'center', justifyContent: 'center',
-    gap: 5, height: 36, borderRadius: Radius.pill,
-    borderWidth: 1, borderColor: Colors.borderLight, backgroundColor: Colors.bgApp,
+    flex: 1,
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'center',
+    gap: 5,
+    height: 36,
+    borderRadius: 10,
+    borderWidth: 1,
+    borderColor: Colors.borderLight,
+    backgroundColor: Colors.bgApp,
   },
-  assetPillText: { ...Typography.badgeText, color: Colors.textSecondary, fontSize: 11 },
+  assetPillText: { ...Typography.badgeText, color: Colors.textSecondary, fontSize: 10 },
 
-  fullBtn: {
-    flexDirection: 'row', alignItems: 'center', justifyContent: 'center',
-    height: 48, borderRadius: Radius.pill,
+  primaryBtn: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'center',
+    minHeight: 50,
+    borderRadius: 14,
+    paddingHorizontal: 16,
   },
-  fullBtnCyan:    { backgroundColor: Colors.brandTeal },
-  fullBtnOutline: { borderWidth: 1, borderColor: Colors.borderLight, backgroundColor: 'transparent' },
-  fullBtnText:    { ...Typography.buttonPrimary, letterSpacing: 0.5 },
+  primaryBtnActive: { backgroundColor: Colors.brandTeal },
+  primaryBtnLocked: {
+    backgroundColor: Colors.bgApp,
+    borderWidth: 1,
+    borderColor: Colors.borderLight,
+  },
+  primaryBtnText: {
+    ...Typography.buttonPrimary,
+    letterSpacing: 0.5,
+  },
+  gateLockHint: {
+    fontSize: 10,
+    color: Colors.textMuted,
+    marginTop: 1,
+    textAlign: 'center',
+  },
 
   twoColRow: { flexDirection: 'row', gap: 8 },
   halfBtn: {
-    flex: 1, flexDirection: 'row', alignItems: 'center', justifyContent: 'center',
-    height: 48, borderRadius: Radius.pill,
+    flex: 1,
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'center',
+    height: 48,
+    borderRadius: 14,
   },
   halfBtnOrange: { backgroundColor: Colors.statusWarning },
   halfBtnGreen:  { backgroundColor: Colors.statusActive },
-  halfBtnText:   { ...Typography.buttonPrimary, fontSize: 12 },
+  halfBtnText:   { ...Typography.buttonPrimary, fontSize: 12, letterSpacing: 0.3 },
+
+  ghostBtn: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'center',
+    height: 42,
+    borderRadius: 12,
+    borderWidth: 1,
+    borderColor: '#ECEEF4',
+    backgroundColor: Colors.bgApp,
+  },
+  ghostBtnText: { ...Typography.badgeText, color: Colors.textSecondary },
 
   closedRow: {
-    flexDirection: 'row', alignItems: 'center',
-    padding: Spacing.md, paddingTop: Spacing.sm,
-    borderTopWidth: 1, borderTopColor: Colors.borderLight,
+    flexDirection: 'row',
+    alignItems: 'center',
+    padding: Spacing.md,
+    paddingTop: 10,
+    borderTopWidth: 1,
+    borderTopColor: '#F0F2F7',
+    gap: 5,
   },
 });

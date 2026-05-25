@@ -38,8 +38,11 @@ export function isBookingAllowed(config: GlobalConfig | null | undefined): {
 }
 
 // ── Revenue protection gate calculation ──────────────────────────────────────
-// Weekly: must pay 100% of (total + deposit + fines)
-// Monthly: must pay 50% of (total + deposit + fines)
+// Weekly:  must pay 100% of (total + deposit + fines) before dispatch
+// Monthly: must pay minimum ₹4,000 before dispatch (hard floor, not a %)
+//          If total owed < ₹4,000, full amount is required.
+export const MONTHLY_GATE_FLOOR = 4000; // ₹ — update here if rate changes
+
 export function calculatePaymentGate(
   rentalPlan: 'Weekly' | 'Monthly',
   totalAmount: number,
@@ -47,14 +50,17 @@ export function calculatePaymentGate(
   finesAmount: number,
   amountPaid: number,
 ): {
-  gatePct: number;
+  gatePct: number | null;  // null for Monthly (fixed floor, not a %)
   gateAmount: number;
   paidPct: number;
   isCleared: boolean;
 } {
   const totalOwed = totalAmount + depositAmount + finesAmount;
-  const gatePct = rentalPlan === 'Weekly' ? 1.0 : 0.5;
-  const gateAmount = totalOwed * gatePct;
+  const gateAmount =
+    rentalPlan === 'Weekly'
+      ? totalOwed                                        // 100%
+      : Math.min(MONTHLY_GATE_FLOOR, totalOwed);        // ₹4,000 floor
+  const gatePct = rentalPlan === 'Weekly' ? 1.0 : null;
   const paidPct = totalOwed > 0 ? amountPaid / totalOwed : 1;
   return {
     gatePct,

@@ -4,6 +4,7 @@
 // Revenue Protection card recalculates live when plan toggle changes
 // ─────────────────────────────────────────────────────────────────────────────
 
+import { Ionicons } from '@expo/vector-icons';
 import React, { useMemo, useState } from 'react';
 import {
   ActivityIndicator,
@@ -23,6 +24,114 @@ import {
   isBookingAllowed,
 } from '../../services/bookingService';
 import { YanaButton } from '../ui';
+
+interface DropdownSelectorProps<T> {
+  label: string;
+  placeholder: string;
+  selectedItem: T | null;
+  items: T[];
+  isOpen: boolean;
+  onToggle: () => void;
+  onSelect: (item: T) => void;
+  iconName: React.ComponentProps<typeof Ionicons>['name'];
+  getItemKey: (item: T) => string;
+  renderItem: (item: T, isSelected: boolean) => React.ReactNode;
+  renderSelected: (item: T) => React.ReactNode;
+  emptyText?: string;
+}
+
+function DropdownSelector<T>({
+  label,
+  placeholder,
+  selectedItem,
+  items,
+  isOpen,
+  onToggle,
+  onSelect,
+  iconName,
+  getItemKey,
+  renderItem,
+  renderSelected,
+  emptyText = 'None available',
+}: DropdownSelectorProps<T>) {
+  return (
+    <View style={styles.dropdownContainer}>
+      <Text style={[Typography.labelCaps, styles.fieldLabel]}>{label}</Text>
+      
+      {/* Trigger Button */}
+      <Pressable
+        style={[
+          styles.dropdownTrigger,
+          isOpen && styles.dropdownTriggerOpen,
+        ]}
+        onPress={onToggle}
+      >
+        <View style={styles.dropdownTriggerLeft}>
+          <Ionicons
+            name={iconName}
+            size={18}
+            color={selectedItem ? Colors.brandTeal : Colors.textMuted}
+            style={{ marginRight: 10 }}
+          />
+          {selectedItem ? (
+            renderSelected(selectedItem)
+          ) : (
+            <Text style={styles.dropdownPlaceholder}>{placeholder}</Text>
+          )}
+        </View>
+        <Ionicons
+          name={isOpen ? 'chevron-up' : 'chevron-down'}
+          size={16}
+          color={Colors.textSecondary}
+        />
+      </Pressable>
+
+      {/* Expanded Dropdown List */}
+      {isOpen && (
+        <View style={styles.dropdownListContainer}>
+          {items.length === 0 ? (
+            <View style={styles.dropdownEmptyRow}>
+              <Text style={styles.dropdownEmptyText}>{emptyText}</Text>
+            </View>
+          ) : (
+            <ScrollView
+              style={styles.dropdownScroll}
+              nestedScrollEnabled={true}
+              showsVerticalScrollIndicator={true}
+            >
+              {items.map((item) => {
+                const key = getItemKey(item);
+                const isSelected = selectedItem ? getItemKey(selectedItem) === key : false;
+                return (
+                  <Pressable
+                    key={key}
+                    style={[
+                      styles.dropdownItemRow,
+                      isSelected && styles.dropdownItemRowSelected,
+                    ]}
+                    onPress={() => onSelect(item)}
+                  >
+                    <View style={{ flex: 1 }}>
+                      {renderItem(item, isSelected)}
+                    </View>
+                    {isSelected && (
+                      <Ionicons
+                        name="checkmark"
+                        size={16}
+                        color={Colors.brandTeal}
+                        style={{ marginLeft: 8 }}
+                      />
+                    )}
+                  </Pressable>
+                );
+              })}
+            </ScrollView>
+          )}
+        </View>
+      )}
+    </View>
+  );
+}
 
 interface BookRideModalProps {
   visible: boolean;
@@ -51,8 +160,13 @@ export function BookRideModal({
   const [selectedVehicle, setSelectedVehicle] = useState<Vehicle | null>(null);
   const [selectedBattery, setSelectedBattery] = useState<Battery | null>(null);
   const [plan, setPlan] = useState<'Weekly' | 'Monthly'>('Weekly');
+  const [openDropdown, setOpenDropdown] = useState<'customer' | 'vehicle' | 'battery' | null>(null);
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
+
+  const toggleDropdown = (type: 'customer' | 'vehicle' | 'battery') => {
+    setOpenDropdown(prev => prev === type ? null : type);
+  };
 
   const availableVehicles = vehicles.filter((v) => v.status === 'Available');
   const availableBatteries = batteries.filter((b) => b.status === 'Available');
@@ -100,6 +214,7 @@ export function BookRideModal({
     setSelectedVehicle(null);
     setSelectedBattery(null);
     setPlan('Weekly');
+    setOpenDropdown(null);
     setError(null);
     onClose();
   };
@@ -128,67 +243,96 @@ export function BookRideModal({
             </View>
           )}
 
-          {/* SELECT RIDER */}
-          <Text style={[Typography.labelCaps, styles.fieldLabel]}>SELECT RIDER</Text>
-          <ScrollView horizontal showsHorizontalScrollIndicator={false} style={styles.chipScroll}>
-            {customers.map((c) => (
-              <Pressable
-                key={c.id}
-                style={[styles.chip, selectedCustomer?.id === c.id && styles.chipSelected]}
-                onPress={() => setSelectedCustomer(c)}
-              >
-                <Text style={[styles.chipText, selectedCustomer?.id === c.id && styles.chipTextSelected]}>
+          {/* SELECT RIDER DROPDOWN */}
+          <DropdownSelector
+            label="SELECT RIDER"
+            placeholder="Select a rider..."
+            selectedItem={selectedCustomer}
+            items={customers}
+            isOpen={openDropdown === 'customer'}
+            onToggle={() => toggleDropdown('customer')}
+            onSelect={(customer) => {
+              setSelectedCustomer(customer);
+              setOpenDropdown(null);
+            }}
+            iconName="person-outline"
+            getItemKey={(c) => c.id}
+            emptyText="No riders registered at this ZAP Point"
+            renderSelected={(c) => (
+              <View style={{ flexDirection: 'row', alignItems: 'center', gap: 6 }}>
+                <Text style={[Typography.bodyPrimary, { fontWeight: '700', color: Colors.textPrimary }]}>
                   {c.name}
                 </Text>
-                <Text style={styles.chipSub}>{c.phone}</Text>
-              </Pressable>
-            ))}
-            {customers.length === 0 && (
-              <Text style={styles.emptyChip}>No riders registered at this ZAP Point</Text>
+                <Text style={[Typography.bodySecondary, { color: Colors.textSecondary }]}>
+                  ({c.phone})
+                </Text>
+              </View>
             )}
-          </ScrollView>
+            renderItem={(c, isSelected) => (
+              <View>
+                <Text style={[Typography.bodyPrimary, { fontWeight: '600', color: isSelected ? Colors.brandTeal : Colors.textPrimary }]}>
+                  {c.name}
+                </Text>
+                <Text style={[Typography.bodySecondary, { color: Colors.textSecondary, marginTop: 2 }]}>
+                  {c.phone}
+                </Text>
+              </View>
+            )}
+          />
 
-          {/* SCOOTER + BATTERY */}
-          <View style={styles.row}>
-            <View style={styles.halfField}>
-              <Text style={[Typography.labelCaps, styles.fieldLabel]}>SCOOTER</Text>
-              <ScrollView style={styles.pickerScroll}>
-                {availableVehicles.map((v) => (
-                  <Pressable
-                    key={v.id}
-                    style={[styles.listItem, selectedVehicle?.id === v.id && styles.listItemSelected]}
-                    onPress={() => setSelectedVehicle(v)}
-                  >
-                    <Text style={[styles.listItemText, selectedVehicle?.id === v.id && { color: Colors.brandCyan, fontWeight: '700' }]}>
-                      🛵 {v.plate_number}
-                    </Text>
-                  </Pressable>
-                ))}
-                {availableVehicles.length === 0 && (
-                  <Text style={styles.emptyChip}>None available</Text>
-                )}
-              </ScrollView>
-            </View>
-            <View style={styles.halfField}>
-              <Text style={[Typography.labelCaps, styles.fieldLabel]}>BATTERY</Text>
-              <ScrollView style={styles.pickerScroll}>
-                {availableBatteries.map((b) => (
-                  <Pressable
-                    key={b.id}
-                    style={[styles.listItem, selectedBattery?.id === b.id && styles.listItemSelected]}
-                    onPress={() => setSelectedBattery(b)}
-                  >
-                    <Text style={[styles.listItemText, selectedBattery?.id === b.id && { color: Colors.brandCyan, fontWeight: '700' }]}>
-                      ⚡ {b.serial_number}
-                    </Text>
-                  </Pressable>
-                ))}
-                {availableBatteries.length === 0 && (
-                  <Text style={styles.emptyChip}>None available</Text>
-                )}
-              </ScrollView>
-            </View>
-          </View>
+          {/* SCOOTER DROPDOWN */}
+          <DropdownSelector
+            label="SCOOTER"
+            placeholder="Select a scooter..."
+            selectedItem={selectedVehicle}
+            items={availableVehicles}
+            isOpen={openDropdown === 'vehicle'}
+            onToggle={() => toggleDropdown('vehicle')}
+            onSelect={(vehicle) => {
+              setSelectedVehicle(vehicle);
+              setOpenDropdown(null);
+            }}
+            iconName="bicycle-outline"
+            getItemKey={(v) => v.id}
+            emptyText="No scooters available"
+            renderSelected={(v) => (
+              <Text style={[Typography.bodyPrimary, { fontWeight: '700', color: Colors.textPrimary }]}>
+                🛵 {v.plate_number}
+              </Text>
+            )}
+            renderItem={(v, isSelected) => (
+              <Text style={[Typography.bodyPrimary, { fontWeight: '600', color: isSelected ? Colors.brandTeal : Colors.textPrimary }]}>
+                🛵 {v.plate_number}
+              </Text>
+            )}
+          />
+
+          {/* BATTERY DROPDOWN */}
+          <DropdownSelector
+            label="BATTERY"
+            placeholder="Select a battery..."
+            selectedItem={selectedBattery}
+            items={availableBatteries}
+            isOpen={openDropdown === 'battery'}
+            onToggle={() => toggleDropdown('battery')}
+            onSelect={(battery) => {
+              setSelectedBattery(battery);
+              setOpenDropdown(null);
+            }}
+            iconName="flash-outline"
+            getItemKey={(b) => b.id}
+            emptyText="No batteries available"
+            renderSelected={(b) => (
+              <Text style={[Typography.bodyPrimary, { fontWeight: '700', color: Colors.textPrimary }]}>
+                ⚡ {b.serial_number}
+              </Text>
+            )}
+            renderItem={(b, isSelected) => (
+              <Text style={[Typography.bodyPrimary, { fontWeight: '600', color: isSelected ? Colors.brandTeal : Colors.textPrimary }]}>
+                ⚡ {b.serial_number}
+              </Text>
+            )}
+          />
 
           {/* PLAN TOGGLE */}
           <Text style={[Typography.labelCaps, styles.fieldLabel]}>SUBSCRIPTION PLAN</Text>
@@ -299,35 +443,80 @@ const styles = StyleSheet.create({
     marginBottom: Spacing.sm,
     marginTop: Spacing.md,
   },
-  chipScroll: { marginBottom: Spacing.sm },
-  chip: {
+  dropdownContainer: {
+    marginBottom: Spacing.md,
+  },
+  dropdownTrigger: {
+    height: 52,
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'space-between',
     backgroundColor: Colors.surfaceCard,
-    borderRadius: Radius.badge + 4,
+    borderRadius: Radius.input,
     borderWidth: 1,
     borderColor: Colors.borderLight,
-    paddingHorizontal: 14,
-    paddingVertical: 10,
-    marginRight: Spacing.sm,
-    minWidth: 120,
+    paddingHorizontal: Spacing.md,
+    shadowColor: '#B0BAD0',
+    shadowOffset: { width: 0, height: 1 },
+    shadowOpacity: 0.05,
+    shadowRadius: 3,
+    elevation: 1,
   },
-  chipSelected: { borderColor: Colors.brandCyan, backgroundColor: '#E0FDFF' },
-  chipText: { ...Typography.bodySecondary, color: Colors.textPrimary, fontWeight: '600' },
-  chipTextSelected: { color: Colors.brandCyan },
-  chipSub: { ...Typography.bodySecondary, color: Colors.textSecondary, marginTop: 2 },
-  emptyChip: { ...Typography.bodySecondary, color: Colors.textSecondary, padding: 8 },
-
-  row: { flexDirection: 'row', gap: Spacing.sm },
-  halfField: { flex: 1 },
-  pickerScroll: {
-    maxHeight: 160,
-    backgroundColor: Colors.surfaceCard,
-    borderRadius: Radius.sm,
-    borderWidth: 1,
+  dropdownTriggerOpen: {
+    borderColor: Colors.brandTeal,
+    borderBottomLeftRadius: 0,
+    borderBottomRightRadius: 0,
+    borderWidth: 1.5,
+  },
+  dropdownTriggerSelected: {
     borderColor: Colors.borderLight,
   },
-  listItem: { paddingHorizontal: 12, paddingVertical: 10, borderBottomWidth: 1, borderBottomColor: Colors.borderLight },
-  listItemSelected: { backgroundColor: '#E0FDFF' },
-  listItemText: { ...Typography.bodySecondary, color: Colors.textPrimary },
+  dropdownTriggerLeft: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    flex: 1,
+  },
+  dropdownPlaceholder: {
+    ...Typography.bodyPrimary,
+    color: Colors.textMuted,
+  },
+  dropdownListContainer: {
+    backgroundColor: Colors.surfaceCard,
+    borderWidth: 1.5,
+    borderColor: Colors.brandTeal,
+    borderTopWidth: 0,
+    borderBottomLeftRadius: Radius.input,
+    borderBottomRightRadius: Radius.input,
+    shadowColor: '#000',
+    shadowOffset: { width: 0, height: 4 },
+    shadowOpacity: 0.08,
+    shadowRadius: 8,
+    elevation: 4,
+    overflow: 'hidden',
+  },
+  dropdownScroll: {
+    maxHeight: 180,
+  },
+  dropdownItemRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'space-between',
+    paddingVertical: 12,
+    paddingHorizontal: Spacing.md,
+    borderBottomWidth: 1,
+    borderBottomColor: Colors.borderLight,
+  },
+  dropdownItemRowSelected: {
+    backgroundColor: '#ECFEFF', // subtle teal tint
+  },
+  dropdownEmptyRow: {
+    padding: Spacing.md,
+    alignItems: 'center',
+  },
+  dropdownEmptyText: {
+    ...Typography.bodySecondary,
+    color: Colors.textSecondary,
+  },
 
   planToggle: { flexDirection: 'row', gap: Spacing.sm, marginBottom: Spacing.md },
   planBtn: {

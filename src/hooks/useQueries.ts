@@ -148,3 +148,36 @@ export function useGlobalConfig() {
     },
   });
 }
+
+// ── Checklist Templates ───────────────────────────────────────────────────────
+// Fetched once and cached aggressively. Admin changes take effect on next app
+// restart (staleTime = 10 min). Filtered by flow type ('return' | 'pause').
+export type ChecklistTemplateItem = {
+  id: number;
+  item_key: string;
+  label: string;
+  description: string;
+  icon_name: string;
+  sort_order: number;
+  is_active: boolean;
+  applies_to: string[];
+  /** Fine in ₹ deducted from security deposit when item is DAMAGED. 0 = no fine. */
+  fine_amount: number;
+};
+
+export function useChecklistTemplate(flow: 'return' | 'pause') {
+  return useQuery({
+    queryKey: ['checklist_templates', flow] as const,
+    staleTime: 10 * 60 * 1000, // 10 min — changes rarely
+    queryFn: async () => {
+      const { data, error } = await supabase
+        .from('checklist_templates')
+        .select('id, item_key, label, description, icon_name, sort_order, is_active, applies_to, fine_amount')
+        .eq('is_active', true)
+        .contains('applies_to', [flow])
+        .order('sort_order', { ascending: true });
+      if (error) throw new Error(error.message);
+      return (data ?? []) as ChecklistTemplateItem[];
+    },
+  });
+}

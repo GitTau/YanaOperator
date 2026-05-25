@@ -112,9 +112,11 @@ interface ReturnModalProps {
   booking: BookingWithDetails | null;
   onClose: () => void;
   onSuccess: () => void;
+  /** Damage fines from the vehicle checklist. Deducted from security deposit. */
+  damageFines?: number;
 }
 
-export function ReturnModal({ visible, booking, onClose, onSuccess }: ReturnModalProps) {
+export function ReturnModal({ visible, booking, onClose, onSuccess, damageFines = 0 }: ReturnModalProps) {
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
 
@@ -136,7 +138,8 @@ export function ReturnModal({ visible, booking, onClose, onSuccess }: ReturnModa
   const handleClose = () => { setError(null); onClose(); };
   if (!booking) return null;
 
-  const balanceDue = booking.total_amount + booking.deposit_amount + booking.fines_amount - booking.amount_paid;
+  const balanceDue        = booking.total_amount + booking.deposit_amount + booking.fines_amount - booking.amount_paid;
+  const depositReturnable = Math.max(0, booking.deposit_amount - damageFines);
 
   return (
     <Modal visible={visible} animationType="slide" presentationStyle="pageSheet" onRequestClose={handleClose}>
@@ -153,11 +156,14 @@ export function ReturnModal({ visible, booking, onClose, onSuccess }: ReturnModa
           </Text>
           <Divider />
 
+          {/* Rental settlement */}
           <View style={{ gap: 8, marginVertical: Spacing.md }}>
-            <SummaryLine label="Total Rent" value={formatCurrency(booking.total_amount)} />
-            <SummaryLine label="Security Deposit" value={formatCurrency(booking.deposit_amount)} />
-            {booking.fines_amount > 0 && <SummaryLine label="Fines" value={formatCurrency(booking.fines_amount)} valueColor={Colors.statusOverdue} />}
-            <SummaryLine label="Amount Paid" value={formatCurrency(booking.amount_paid)} valueColor={Colors.statusActive} />
+            <SummaryLine label="Total Rent"        value={formatCurrency(booking.total_amount)} />
+            <SummaryLine label="Security Deposit"  value={formatCurrency(booking.deposit_amount)} />
+            {booking.fines_amount > 0 && (
+              <SummaryLine label="Fines" value={formatCurrency(booking.fines_amount)} valueColor={Colors.statusOverdue} />
+            )}
+            <SummaryLine label="Amount Paid"       value={formatCurrency(booking.amount_paid)} valueColor={Colors.statusActive} />
             <Divider />
             <SummaryLine
               label="Balance Due"
@@ -172,6 +178,37 @@ export function ReturnModal({ visible, booking, onClose, onSuccess }: ReturnModa
                 ⚠ Collect {formatCurrency(balanceDue)} before completing return.
               </Text>
             </View>
+          )}
+
+          {/* Deposit settlement — only show if checklist found damage */}
+          {damageFines > 0 && (
+            <>
+              <Divider />
+              <Text style={[Typography.labelCaps, { color: Colors.statusError, marginTop: Spacing.md, marginBottom: Spacing.sm }]}>
+                DEPOSIT SETTLEMENT
+              </Text>
+              <View style={{ gap: 6 }}>
+                <SummaryLine label="Security Deposit"  value={formatCurrency(booking.deposit_amount)} />
+                <SummaryLine
+                  label="Damage Fines (checklist)"
+                  value={`− ${formatCurrency(damageFines)}`}
+                  valueColor={Colors.statusOverdue}
+                />
+                <Divider />
+                <SummaryLine
+                  label="Returnable to Rider"
+                  value={formatCurrency(depositReturnable)}
+                  valueColor={depositReturnable > 0 ? Colors.statusActive : Colors.statusOverdue}
+                />
+              </View>
+              {depositReturnable === 0 && (
+                <View style={[styles.warningBox, { borderLeftColor: Colors.statusOverdue, marginTop: Spacing.sm }]}>
+                  <Text style={[styles.warningText, { color: Colors.statusOverdue }]}>
+                    ⚠ Full deposit forfeited — damage fines exceed deposit amount.
+                  </Text>
+                </View>
+              )}
+            </>
           )}
 
           {error && <Text style={styles.errorText}>⚠ {error}</Text>}
