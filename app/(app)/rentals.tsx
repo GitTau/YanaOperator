@@ -9,6 +9,7 @@ import { useQueryClient } from '@tanstack/react-query';
 import React, { useMemo, useState } from 'react';
 import {
   FlatList,
+  LayoutAnimation,
   Pressable,
   RefreshControl,
   SafeAreaView,
@@ -178,6 +179,19 @@ export default function RentalsScreen() {
     }
   };
 
+  // Resume a paused booking — re-activates without another checklist
+  const handleResume = async (booking: BookingWithDetails) => {
+    setActionLoading(booking.id);
+    try {
+      await dispatchBooking(booking.id, booking.vehicle_id, booking.battery_id);
+      invalidate();
+    } catch (e) {
+      console.error('[Rentals] resume failed:', e);
+    } finally {
+      setActionLoading(null);
+    }
+  };
+
   // Pause requires checklist first (AGENTS.md business rule)
   const handlePauseRequest = (booking: BookingWithDetails) => {
     setChecklistBooking(booking);
@@ -205,13 +219,49 @@ export default function RentalsScreen() {
     setChecklistBooking(null);
   };
 
-  const availableVehicles = (vehicles ?? []).filter(v => v.status === 'Available');
-  const availableBatteries = (batteries ?? []).filter(b => b.status === 'Available');
-
   const allBookings = (bookings ?? []) as BookingWithDetails[];
+
+  const busyCustomerIds = useMemo(() => {
+    const ids = new Set<string>();
+    allBookings.forEach(b => {
+      if (b.status === 'Draft' || b.status === 'Active' || b.status === 'Paused') {
+        ids.add(b.customer_id);
+      }
+    });
+    return ids;
+  }, [allBookings]);
+
+  const busyVehicleIds = useMemo(() => {
+    const ids = new Set<string>();
+    allBookings.forEach(b => {
+      if (b.status === 'Draft' || b.status === 'Active' || b.status === 'Paused') {
+        ids.add(b.vehicle_id);
+      }
+    });
+    return ids;
+  }, [allBookings]);
+
+  const busyBatteryIds = useMemo(() => {
+    const ids = new Set<string>();
+    allBookings.forEach(b => {
+      if (b.status === 'Draft' || b.status === 'Active' || b.status === 'Paused') {
+        ids.add(b.battery_id);
+      }
+    });
+    return ids;
+  }, [allBookings]);
+
+  const availableVehicles = useMemo(() => {
+    return (vehicles ?? []).filter(v => v.status === 'Available' && !busyVehicleIds.has(v.id));
+  }, [vehicles, busyVehicleIds]);
+
+  const availableBatteries = useMemo(() => {
+    return (batteries ?? []).filter(b => b.status === 'Available' && !busyBatteryIds.has(b.id));
+  }, [batteries, busyBatteryIds]);
 
   // Switch board view — reset status chip to All
   const handleBoardSwitch = (view: BoardView) => {
+    LayoutAnimation.configureNext(LayoutAnimation.Presets.easeInEaseOut);
     setBoardView(view);
     setStatusFilter('All');
   };
@@ -232,7 +282,13 @@ export default function RentalsScreen() {
 
         {/* Book Ride — full-width cyan pill */}
         <Pressable
-          style={({ pressed }) => [styles.bookBtn, { opacity: pressed ? 0.88 : 1 }]}
+          style={({ pressed }) => [
+            styles.bookBtn,
+            {
+              opacity: pressed ? 0.88 : 1,
+              transform: [{ scale: pressed ? 0.96 : 1 }],
+            },
+          ]}
           onPress={() => setShowBookRide(true)}
           accessibilityRole="button"
           accessibilityLabel="Book a new ride"
@@ -254,7 +310,11 @@ export default function RentalsScreen() {
           {(['LIVE BOARD', 'MASTER HISTORY'] as BoardView[]).map(v => (
             <Pressable
               key={v}
-              style={[styles.boardBtn, boardView === v && styles.boardBtnActive]}
+              style={({ pressed }) => [
+                styles.boardBtn,
+                boardView === v && styles.boardBtnActive,
+                { transform: [{ scale: pressed ? 0.96 : 1 }] },
+              ]}
               onPress={() => handleBoardSwitch(v)}
             >
               <Ionicons
@@ -281,11 +341,15 @@ export default function RentalsScreen() {
             return (
               <Pressable
                 key={f}
-                style={[
+                style={({ pressed }) => [
                   styles.chip,
                   isActive && (cfg ? { backgroundColor: cfg.bg, borderColor: cfg.active } : styles.chipActiveDefault),
+                  { transform: [{ scale: pressed ? 0.95 : 1 }] },
                 ]}
-                onPress={() => setStatusFilter(f)}
+                onPress={() => {
+                  LayoutAnimation.configureNext(LayoutAnimation.Presets.easeInEaseOut);
+                  setStatusFilter(f);
+                }}
               >
                 {f !== 'All' && cfg && isActive && (
                   <View style={[styles.chipDot, { backgroundColor: cfg.active }]} />
@@ -341,6 +405,7 @@ export default function RentalsScreen() {
               onDispatch={handleDispatch}
               onCollectCash={setPaymentTarget}
               onPause={handlePauseRequest}
+              onResume={handleResume}
               onReturn={handleReturnRequest}
               onSwap={setSwapTarget}
             />
@@ -366,8 +431,9 @@ export default function RentalsScreen() {
         storeId={storeId ?? ''}
         operatorId={operatorId}
         customers={customers ?? []}
-        vehicles={vehicles ?? []}
-        batteries={batteries ?? []}
+        busyCustomerIds={busyCustomerIds}
+        vehicles={availableVehicles}
+        batteries={availableBatteries}
         globalConfig={globalConfig ?? null}
       />
       <PaymentModal

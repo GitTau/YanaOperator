@@ -20,6 +20,7 @@ import {
 import { Colors, Radius, Spacing, Typography } from '../../src/constants/design';
 import { useLayout } from '../../src/constants/layout';
 import { useAuthStore } from '../../src/stores/authStore';
+import { YanaLogo } from '../../src/components/YanaLogo';
 
 export default function LoginScreen() {
   const [email, setEmail] = useState('');
@@ -52,12 +53,13 @@ export default function LoginScreen() {
 
           {/* Hero */}
           <View style={[styles.hero, { marginBottom: isSmallPhone ? Spacing.lg : Spacing.xl }]}>
-            <Text style={[styles.wordmark, { fontSize: fontScale(48) }]}>YANA</Text>
+            <YanaLogo width={200} height={50} color={Colors.brandTeal} style={{ marginBottom: 8 }} />
             <Text style={[styles.tagline, { fontSize: fontScale(12) }]}>OPS CENTER</Text>
             <Text style={[styles.subTagline, { fontSize: fontScale(13) }]}>
               Fleet Operations Platform
             </Text>
           </View>
+
 
           {/* Card */}
           <View style={styles.card}>

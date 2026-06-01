@@ -8,7 +8,11 @@
 import { Tabs, router } from 'expo-router';
 import { Ionicons } from '@expo/vector-icons';
 import React from 'react';
-import { Pressable, StyleSheet, Text, View } from 'react-native';
+import { Platform, Pressable, StyleSheet, Text, UIManager, View } from 'react-native';
+
+if (Platform.OS === 'android' && UIManager.setLayoutAnimationEnabledExperimental) {
+  UIManager.setLayoutAnimationEnabledExperimental(true);
+}
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { Colors, Radius, Spacing, Typography } from '../../src/constants/design';
 import { YanaHeader } from '../../src/components/YanaHeader';
@@ -29,22 +33,28 @@ function TabItem({ iconActive, iconInactive, label, focused, onPress }: TabItemP
   return (
     <Pressable
       onPress={onPress}
-      style={({ pressed }) => [styles.tabItem, { opacity: pressed ? 0.7 : 1 }]}
+      style={({ pressed }) => [
+        styles.tabItem,
+        {
+          opacity: pressed ? 0.75 : 1,
+        },
+      ]}
       accessibilityRole="tab"
       accessibilityLabel={label}
       accessibilityState={{ selected: focused }}
     >
-      <View style={[styles.tabPill, focused && styles.tabPillActive]}>
-        <Ionicons
-          name={focused ? iconActive : iconInactive}
-          size={18}
-          color={focused ? Colors.brandNavy : Colors.textSecondary}
-        />
-        <Text style={[styles.tabLabel, focused && styles.tabLabelActive]}>{label}</Text>
-      </View>
+      <Ionicons
+        name={focused ? iconActive : iconInactive}
+        size={20}
+        color={focused ? Colors.brandTeal : Colors.textSecondary}
+      />
+      <Text style={[styles.tabLabel, focused && styles.tabLabelActive]}>{label}</Text>
     </Pressable>
   );
 }
+
+
+
 
 const TAB_CONFIG: { iconActive: IoniconName; iconInactive: IoniconName; label: string; route: string }[] = [
   { iconActive: 'analytics',     iconInactive: 'analytics-outline',      label: 'Overview', route: 'index'    },
@@ -117,34 +127,28 @@ const styles = StyleSheet.create({
     backgroundColor: Colors.surfaceCard,
     borderTopWidth: 1,
     borderTopColor: Colors.borderLight,
-    paddingTop: Spacing.sm,
-    paddingHorizontal: Spacing.xs,
+    paddingTop: 8,
+    paddingHorizontal: 8,
+    height: 56, // Standard mobile stacked tab bar height
   },
   tabItem: {
     flex: 1,
     alignItems: 'center',
-    // Ensure minimum touch target height is met
-    minHeight: 48,
     justifyContent: 'center',
-  },
-  tabPill: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: 4,
-    paddingHorizontal: 10,
-    paddingVertical: 7,
-    borderRadius: Radius.button,
-  },
-  tabPillActive: {
-    backgroundColor: Colors.brandCyan,
+    paddingVertical: 4,
+    position: 'relative',
   },
   tabLabel: {
     ...Typography.badgeText,
     color: Colors.textSecondary,
     fontSize: 10,
+    marginTop: 2,
+    fontWeight: '500',
   },
   tabLabelActive: {
-    color: Colors.brandNavy,
-    fontWeight: '700',
+    color: Colors.brandTeal, // High-energy cyan text
+    fontWeight: '800',
   },
 });
+
+

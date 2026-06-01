@@ -50,7 +50,7 @@ export function YanaButton({
   }[variant];
 
   const textColor = {
-    primary:   '#FFFFFF',
+    primary:   Colors.brandNavy, // Black text on high-energy cyan
     secondary: Colors.textPrimary,
     danger:    '#FFFFFF',
     warning:   '#FFFFFF',
@@ -71,6 +71,7 @@ export function YanaButton({
           backgroundColor: bg,
           height: btnHeight,
           opacity: isDisabled ? 0.45 : pressed ? 0.88 : 1,
+          transform: [{ scale: pressed && !isDisabled ? 0.95 : 1 }], // Snappy transform from style guide
         },
         variant === 'secondary' && styles.buttonOutline,
         variant === 'ghost' && { paddingHorizontal: 0, height: undefined, minHeight: 36 },
@@ -100,11 +101,11 @@ export function YanaButton({
 
 // ── StatusBadge ───────────────────────────────────────────────────────────────
 const BADGE_CONFIG: Record<BookingStatusKey, { bg: string; text: string }> = {
-  Draft:     { bg: '#F3F4F6', text: '#6B7280' },
-  Active:    { bg: '#F0FDF4', text: '#059669' },
-  Paused:    { bg: '#FFFBEB', text: '#D97706' },
-  Completed: { bg: '#EFF6FF', text: '#2563EB' },
-  Cancelled: { bg: '#F9FAFB', text: '#9CA3AF' },
+  Draft:     { bg: '#F1F5F9', text: '#475569' }, // slate-100/600
+  Active:    { bg: '#ECFDF5', text: '#047857' }, // emerald-50/700
+  Paused:    { bg: '#FFFBEB', text: '#B45309' }, // amber-50/700
+  Completed: { bg: '#EFF6FF', text: '#2563EB' }, // blue-50/600
+  Cancelled: { bg: '#F1F5F9', text: '#94A3B8' }, // slate-100/400
 };
 
 interface StatusBadgeProps {
@@ -114,7 +115,7 @@ interface StatusBadgeProps {
 export function StatusBadge({ status }: StatusBadgeProps) {
   const config = BADGE_CONFIG[status];
   return (
-    <View style={[styles.badge, { backgroundColor: config.bg }]}>
+    <View style={[styles.badge, { backgroundColor: config.bg, borderColor: Colors.borderLight, borderWidth: 1 }]}>
       <Text style={[Typography.badgeText, { color: config.text }]}>{status.toUpperCase()}</Text>
     </View>
   );
@@ -125,18 +126,19 @@ export function PaymentGateBadge({ isCleared }: { isCleared: boolean }) {
   if (isCleared) {
     return (
       <View style={[styles.gateBadge, styles.gateBadgeClear]}>
-        <Ionicons name="checkmark-circle" size={11} color={Colors.statusActive} />
-        <Text style={[Typography.badgeText, { color: Colors.statusActive, marginLeft: 3 }]}>CLEAR</Text>
+        <Ionicons name="checkmark-circle" size={11} color={Colors.textSuccess} />
+        <Text style={[Typography.badgeText, { color: Colors.textSuccess, marginLeft: 3 }]}>CLEAR</Text>
       </View>
     );
   }
   return (
     <View style={[styles.gateBadge, styles.gateBadgeNotClear]}>
-      <Ionicons name="lock-closed" size={11} color={Colors.statusError} />
-      <Text style={[Typography.badgeText, { color: Colors.statusError, marginLeft: 3 }]}>NOT CLEAR</Text>
+      <Ionicons name="lock-closed" size={11} color={Colors.textError} />
+      <Text style={[Typography.badgeText, { color: Colors.textError, marginLeft: 3 }]}>NOT CLEAR</Text>
     </View>
   );
 }
+
 
 // ── KPICard ───────────────────────────────────────────────────────────────────
 interface KPICardProps {
@@ -164,7 +166,11 @@ export function KPICard({
       onPress={onPress}
       style={({ pressed }) => [
         styles.kpiCard,
-        { backgroundColor, opacity: pressed && onPress ? 0.88 : 1 },
+        {
+          backgroundColor,
+          opacity: pressed && onPress ? 0.88 : 1,
+          transform: [{ scale: pressed && onPress ? 0.97 : 1 }],
+        },
         accentColor && !backgroundColor ? { borderLeftColor: accentColor, borderLeftWidth: 3 } : undefined,
       ]}
       accessibilityRole={onPress ? 'button' : 'text'}
@@ -201,9 +207,10 @@ interface ProgressBarProps {
 export function ProgressBar({ progress, height = 6 }: ProgressBarProps) {
   const clipped = Math.min(Math.max(progress, 0), 1);
 
-  let fillColor = Colors.brandTeal;
+  let fillColor: string = Colors.brandTeal;
   if (clipped >= 1) fillColor = Colors.statusActive;
   else if (clipped < 0.4) fillColor = Colors.statusWarning;
+
 
   return (
     <View style={[styles.progressTrack, { height }]}>
@@ -223,12 +230,25 @@ interface SearchBarProps extends TextInputProps {
 }
 
 export function SearchBar({ placeholder = 'Search...', ...props }: SearchBarProps) {
+  const [isFocused, setIsFocused] = React.useState(false);
   return (
     <TextInput
       {...props}
       placeholder={placeholder}
       placeholderTextColor={Colors.textMuted}
-      style={[styles.searchBar, props.style]}
+      onFocus={(e) => {
+        setIsFocused(true);
+        props.onFocus?.(e);
+      }}
+      onBlur={(e) => {
+        setIsFocused(false);
+        props.onBlur?.(e);
+      }}
+      style={[
+        styles.searchBar,
+        isFocused && styles.searchBarFocused,
+        props.style,
+      ]}
       accessibilityLabel={placeholder}
     />
   );
@@ -397,6 +417,15 @@ const styles = StyleSheet.create({
     paddingHorizontal: Spacing.md,
     ...Typography.bodyPrimary,
     color: Colors.textPrimary,
+  },
+  searchBarFocused: {
+    borderColor: Colors.brandTeal,
+    borderWidth: 1.5,
+    shadowColor: Colors.brandTeal,
+    shadowOffset: { width: 0, height: 2 },
+    shadowOpacity: 0.12,
+    shadowRadius: 4,
+    elevation: 2,
   },
 
   skeleton: {

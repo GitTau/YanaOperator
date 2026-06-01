@@ -14,7 +14,9 @@ import { Ionicons } from '@expo/vector-icons';
 import React, { useState } from 'react';
 import {
   ActivityIndicator,
+  LayoutAnimation,
   Modal,
+  Platform,
   Pressable,
   ScrollView,
   StyleSheet,
@@ -74,23 +76,20 @@ export function ChecklistModal({
 
   const [states, setStates]     = useState<Record<string, ItemState>>({});
   const [notes, setNotes]       = useState<Record<string, string>>({});
-  const [odometer, setOdometer] = useState('');
   const [showRaiseTicket, setShowRaiseTicket] = useState(false);
 
   // ── Derived values ────────────────────────────────────────────────────────
 
   const totalItems     = items?.length ?? 0;
-  const hasOdometerItem = (items ?? []).some(i => i.item_key === 'odometer');
 
-  const completedCount = (items ?? []).filter(i => {
-    if (i.item_key === 'odometer') return odometer.trim().length > 0; // odometer uses dedicated input
-    return states[i.item_key] !== null && states[i.item_key] !== undefined;
-  }).length;
+  const completedCount = (items ?? []).filter(i =>
+    states[i.item_key] !== null && states[i.item_key] !== undefined
+  ).length;
 
   const hasIssues  = Object.values(states).some(s => s === 'issue' || s === 'damaged');
   const hasDamage  = Object.values(states).some(s => s === 'damaged');
   const allComplete = totalItems > 0 && completedCount === totalItems;
-  const canSubmit  = allComplete && odometer.trim().length > 0;
+  const canSubmit  = allComplete;
 
   // Sum fine_amount for every DAMAGED item
   const totalDamageFines = (items ?? []).reduce((sum, item) => {
@@ -124,7 +123,6 @@ export function ChecklistModal({
   const handleClose = () => {
     setStates({});
     setNotes({});
-    setOdometer('');
     setShowRaiseTicket(false);
     onClose();
   };
@@ -278,27 +276,8 @@ export function ChecklistModal({
             contentContainerStyle={styles.scrollContent}
             showsVerticalScrollIndicator={false}
           >
-            {/* Odometer — dedicated numeric input, always first */}
-            <View style={styles.odometerCard}>
-              <View style={styles.odometerRow}>
-                <Ionicons name="speedometer-outline" size={18} color={Colors.brandTeal} />
-                <Text style={styles.odometerLabel}>Current Odometer (km) *</Text>
-              </View>
-              <TextInput
-                style={styles.odometerInput}
-                value={odometer}
-                onChangeText={setOdometer}
-                placeholder="e.g. 4832"
-                placeholderTextColor={Colors.textMuted}
-                keyboardType="numeric"
-              />
-              <Text style={styles.odometerHint}>Required for predictive maintenance scheduling</Text>
-            </View>
-
             {/* 14 dynamic checklist items */}
             {items.map((item: ChecklistTemplateItem, index: number) => {
-              if (item.item_key === 'odometer') return null; // handled above
-
               const current  = states[item.item_key] ?? null;
               const itemNote = notes[item.item_key] ?? '';
               const needsNote = current === 'issue' || current === 'damaged';
@@ -358,14 +337,18 @@ export function ChecklistModal({
                     {(['ok', 'issue', 'damaged'] as Exclude<ItemState, null>[]).map(state => (
                       <Pressable
                         key={state}
-                        style={[
+                        style={({ pressed }) => [
                           styles.stateBtn,
                           current === state && {
                             backgroundColor: STATE_CONFIG[state].bg,
                             borderColor: STATE_CONFIG[state].color,
                           },
+                          { transform: [{ scale: pressed ? 0.95 : 1 }] },
                         ]}
-                        onPress={() => setItemState(item.item_key, state)}
+                        onPress={() => {
+                          LayoutAnimation.configureNext(LayoutAnimation.Presets.easeInEaseOut);
+                          setItemState(item.item_key, state);
+                        }}
                       >
                         <Ionicons
                           name={STATE_CONFIG[state].icon}
@@ -467,11 +450,21 @@ export function ChecklistModal({
 
         {/* Action bar */}
         <View style={styles.actionBar}>
-          <Pressable style={styles.cancelBtn} onPress={handleClose}>
+          <Pressable
+            style={({ pressed }) => [
+              styles.cancelBtn,
+              { transform: [{ scale: pressed ? 0.96 : 1 }] },
+            ]}
+            onPress={handleClose}
+          >
             <Text style={styles.cancelBtnText}>Cancel</Text>
           </Pressable>
           <Pressable
-            style={[styles.submitBtn, !canSubmit && styles.submitBtnDisabled]}
+            style={({ pressed }) => [
+              styles.submitBtn,
+              !canSubmit && styles.submitBtnDisabled,
+              { transform: [{ scale: pressed && canSubmit ? 0.96 : 1 }] },
+            ]}
             onPress={handleSubmit}
             disabled={!canSubmit}
           >

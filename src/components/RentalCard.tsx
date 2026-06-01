@@ -17,11 +17,12 @@ interface RentalCardProps {
   onDispatch:    (b: BookingWithDetails) => void;
   onCollectCash: (b: BookingWithDetails) => void;
   onPause:       (b: BookingWithDetails) => void;
+  onResume:      (b: BookingWithDetails) => void;
   onReturn:      (b: BookingWithDetails) => void;
   onSwap:        (b: BookingWithDetails) => void;
 }
 
-export function RentalCard({ booking, onDispatch, onCollectCash, onPause, onReturn, onSwap }: RentalCardProps) {
+export function RentalCard({ booking, onDispatch, onCollectCash, onPause, onResume, onReturn, onSwap }: RentalCardProps) {
   const [financialExpanded, setFinancialExpanded] = useState(false);
 
   const gate = calculatePaymentGate(
@@ -151,17 +152,19 @@ export function RentalCard({ booking, onDispatch, onCollectCash, onPause, onRetu
       {/* ── Actions ──────────────────────────────────────────────────── */}
       {!isClosed && (
         <View style={styles.actionBlock}>
-          {/* Asset pills */}
-          <View style={styles.assetPillRow}>
-            <Pressable style={styles.assetPill} onPress={() => onSwap(booking)}>
-              <Ionicons name="bicycle-outline" size={13} color={Colors.textSecondary} />
-              <Text style={styles.assetPillText}>SWAP SCOOTER</Text>
-            </Pressable>
-            <Pressable style={styles.assetPill} onPress={() => onSwap(booking)}>
-              <Ionicons name="battery-charging-outline" size={13} color={Colors.textSecondary} />
-              <Text style={styles.assetPillText}>SWAP BATTERY</Text>
-            </Pressable>
-          </View>
+          {/* Asset pills — only show when booking is not a Draft (already active/paused) */}
+          {!isDraft && (
+            <View style={styles.assetPillRow}>
+              <Pressable style={styles.assetPill} onPress={() => onSwap(booking)}>
+                <Ionicons name="bicycle-outline" size={13} color={Colors.textSecondary} />
+                <Text style={styles.assetPillText}>SWAP SCOOTER</Text>
+              </Pressable>
+              <Pressable style={styles.assetPill} onPress={() => onSwap(booking)}>
+                <Ionicons name="battery-charging-outline" size={13} color={Colors.textSecondary} />
+                <Text style={styles.assetPillText}>SWAP BATTERY</Text>
+              </Pressable>
+            </View>
+          )}
 
           {/* Draft → Dispatch */}
           {isDraft && (
@@ -211,15 +214,24 @@ export function RentalCard({ booking, onDispatch, onCollectCash, onPause, onRetu
             </View>
           )}
 
-          {/* Paused → Return */}
+          {/* Paused → Resume + Return */}
           {isPaused && (
-            <Pressable
-              style={({ pressed }) => [styles.primaryBtn, styles.halfBtnGreen, { opacity: pressed ? 0.85 : 1 }]}
-              onPress={() => onReturn(booking)}
-            >
-              <Ionicons name="checkmark-circle-outline" size={15} color="#FFFFFF" style={{ marginRight: 7 }} />
-              <Text style={[styles.primaryBtnText, { color: '#FFFFFF' }]}>RETURN VEHICLE</Text>
-            </Pressable>
+            <View style={styles.twoColRow}>
+              <Pressable
+                style={({ pressed }) => [styles.halfBtn, styles.halfBtnTeal, { opacity: pressed ? 0.85 : 1 }]}
+                onPress={() => onResume(booking)}
+              >
+                <Ionicons name="play-outline" size={14} color={Colors.brandNavy} style={{ marginRight: 4 }} />
+                <Text style={[styles.halfBtnText, { color: Colors.brandNavy }]}>RESUME</Text>
+              </Pressable>
+              <Pressable
+                style={({ pressed }) => [styles.halfBtn, styles.halfBtnGreen, { opacity: pressed ? 0.85 : 1 }]}
+                onPress={() => onReturn(booking)}
+              >
+                <Ionicons name="checkmark-circle-outline" size={14} color="#FFFFFF" style={{ marginRight: 4 }} />
+                <Text style={[styles.halfBtnText, { color: '#FFFFFF' }]}>RETURN</Text>
+              </Pressable>
+            </View>
           )}
 
           {/* Collect cash — always */}
@@ -449,6 +461,7 @@ const styles = StyleSheet.create({
     borderRadius: 14,
   },
   halfBtnOrange: { backgroundColor: Colors.statusWarning },
+  halfBtnTeal:   { backgroundColor: Colors.brandTeal },
   halfBtnGreen:  { backgroundColor: Colors.statusActive },
   halfBtnText:   { ...Typography.buttonPrimary, fontSize: 12, letterSpacing: 0.3 },
 

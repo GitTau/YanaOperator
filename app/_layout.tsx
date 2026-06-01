@@ -4,6 +4,13 @@ import * as SplashScreen from 'expo-splash-screen';
 import React, { useEffect } from 'react';
 import { GestureHandlerRootView } from 'react-native-gesture-handler';
 import { SafeAreaProvider } from 'react-native-safe-area-context';
+import {
+  useFonts,
+  Nunito_500Medium,
+  Nunito_700Bold,
+  Nunito_800ExtraBold,
+  Nunito_900Black,
+} from '@expo-google-fonts/nunito';
 import { useAuthStore } from '../src/stores/authStore';
 import { useStoreSelectionStore } from '../src/stores/storeSelectionStore';
 
@@ -22,13 +29,20 @@ export default function RootLayout() {
   const { initialize, isAuthenticated, isLoading: authLoading } = useAuthStore();
   const { loadPersistedStore, selectedStore, isLoaded: storeLoaded } = useStoreSelectionStore();
 
+  const [fontsLoaded] = useFonts({
+    'Nunito-Medium': Nunito_500Medium,
+    'Nunito-Bold': Nunito_700Bold,
+    'Nunito-ExtraBold': Nunito_800ExtraBold,
+    'Nunito-Black': Nunito_900Black,
+  });
+
   useEffect(() => {
     initialize();
     loadPersistedStore();
   }, []);
 
   useEffect(() => {
-    if (!authLoading && storeLoaded) {
+    if (!authLoading && storeLoaded && fontsLoaded) {
       SplashScreen.hideAsync();
       if (!isAuthenticated) {
         router.replace('/(auth)/login');
@@ -38,7 +52,11 @@ export default function RootLayout() {
         router.replace('/(app)');
       }
     }
-  }, [isAuthenticated, authLoading, selectedStore, storeLoaded]);
+  }, [isAuthenticated, authLoading, selectedStore, storeLoaded, fontsLoaded]);
+
+  if (!fontsLoaded) {
+    return null;
+  }
 
   return (
     <GestureHandlerRootView style={{ flex: 1 }}>
@@ -53,3 +71,4 @@ export default function RootLayout() {
     </GestureHandlerRootView>
   );
 }
+

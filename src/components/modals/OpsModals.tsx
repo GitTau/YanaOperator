@@ -46,7 +46,7 @@ export function PauseModal({ visible, booking, onClose, onSuccess }: PauseModalP
     setLoading(true);
     setError(null);
     try {
-      await pauseBooking(booking.id, booking.vehicle_id, reason.trim());
+      await pauseBooking(booking.id, booking.vehicle_id, booking.battery_id, reason.trim());
       handleClose();
       onSuccess();
     } catch (err) {

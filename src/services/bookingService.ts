@@ -91,10 +91,57 @@ export function calculatePricing(
 }
 
 // ── create_booking RPC ────────────────────────────────────────────────────────
-export async function createBooking(params: CreateBookingParams): Promise<string> {
-  const { data, error } = await supabase.rpc('create_booking', params);
+export async function createBooking(
+  params: CreateBookingParams & { start_date?: string; end_date?: string }
+): Promise<string> {
+  const { start_date, end_date, ...rpcParams } = params;
+  const { data, error } = await supabase.rpc('create_booking', rpcParams);
   if (error) throw new Error(`Create booking failed: ${error.message}`);
-  return data as string;
+
+  const bookingId = data as string;
+
+  // The create_booking RPC marks the booking as 'Active' immediately,
+  // but it must start as 'Draft' until physical dispatch occurs.
+  // Reset it back to 'Draft' and clear started_at.
+  const { error: bookingResetError } = await supabase
+    .from('bookings')
+    .update({ status: 'Draft', started_at: null })
+    .eq('id', bookingId);
+  if (bookingResetError) {
+    console.error('[createBooking] Failed to reset booking status to Draft:', bookingResetError.message);
+  }
+
+  // The create_booking RPC marks vehicle + battery as 'In Use' immediately,
+  // but assets must only be locked on Dispatch (when payment gate is cleared).
+  // Release them back to Available now — dispatchBooking will re-lock on dispatch.
+  const { error: vehicleResetError } = await supabase
+    .from('vehicles')
+    .update({ status: 'Available', assigned_battery_id: null })
+    .eq('id', params.p_vehicle_id);
+  if (vehicleResetError) {
+    console.error('[createBooking] Failed to reset vehicle status:', vehicleResetError.message);
+  }
+
+  const { error: batteryResetError } = await supabase
+    .from('batteries')
+    .update({ status: 'Available', assigned_vehicle_id: null })
+    .eq('id', params.p_battery_id);
+  if (batteryResetError) {
+    console.error('[createBooking] Failed to reset battery status:', batteryResetError.message);
+  }
+
+  if (start_date && end_date) {
+    const { error: customerError } = await supabase
+      .from('customers')
+      .update({ start_date, end_date })
+      .eq('id', params.p_customer_id);
+
+    if (customerError) {
+      console.error('Failed to update customer rental dates:', customerError.message);
+    }
+  }
+
+  return bookingId;
 }
 
 // ── record_payment RPC ────────────────────────────────────────────────────────
@@ -113,6 +160,7 @@ export async function swapAssets(params: SwapAssetsParams): Promise<void> {
 export async function pauseBooking(
   bookingId: string,
   vehicleId: string,
+  batteryId: string,
   pauseReason: string,
 ): Promise<void> {
   // Step 1: Update booking to Paused
@@ -126,12 +174,19 @@ export async function pauseBooking(
     .eq('id', bookingId);
   if (bookingError) throw new Error(`Pause booking failed: ${bookingError.message}`);
 
-  // Step 2: Release vehicle back to Available
+  // Step 2: Release vehicle back to Available (delink battery)
   const { error: vehicleError } = await supabase
     .from('vehicles')
     .update({ status: 'Available', assigned_battery_id: null })
     .eq('id', vehicleId);
   if (vehicleError) throw new Error(`Release vehicle failed: ${vehicleError.message}`);
+
+  // Step 3: Release battery back to Available (delink vehicle)
+  const { error: batteryError } = await supabase
+    .from('batteries')
+    .update({ status: 'Available', assigned_vehicle_id: null })
+    .eq('id', batteryId);
+  if (batteryError) throw new Error(`Release battery failed: ${batteryError.message}`);
 }
 
 // ── Complete / Return booking (direct update) ────────────────────────────────

@@ -107,37 +107,42 @@ export default function FleetScreen() {
         ) : (
           <>
             <View style={styles.kpiGrid}>
-              <KPICard
-                label="FLEET SIZE"
-                value={vehicles?.length ?? 0}
-                icon="layers-outline"
-                onPress={() => setActiveFilter('all')}
-              />
-              <KPICard
-                label="AVAILABLE"
-                value={`Sc - ${availableVehicles.length}, Bat - ${availableBatteries.length}`}
-                valueColor={Colors.statusActive}
-                backgroundColor={Colors.surfaceGreen}
-                icon="checkmark-circle-outline"
-                onPress={() => setActiveFilter('available')}
-              />
-              <KPICard
-                label="IN USE"
-                value={vehicles?.filter((v) => v.status === 'In Use').length ?? 0}
-                valueColor={Colors.brandTeal}
-                backgroundColor={Colors.surfaceTeal}
-                icon="radio-button-on-outline"
-                onPress={() => setActiveFilter('active')}
-              />
-              <KPICard
-                label="INACTIVE"
-                value={`Sc - ${inactiveVehicles.length + maintenanceVehicles.length}, Bat - ${mainBatteries.length}`}
-                valueColor={Colors.statusError}
-                backgroundColor={Colors.surfaceRed}
-                icon="construct-outline"
-                onPress={() => setActiveFilter('maintenance')}
-              />
+              <View style={styles.kpiRow}>
+                <KPICard
+                  label="FLEET SIZE"
+                  value={vehicles?.length ?? 0}
+                  icon="layers-outline"
+                  onPress={() => setActiveFilter('all')}
+                />
+                <KPICard
+                  label="AVAILABLE"
+                  value={`Sc - ${availableVehicles.length}, Bat - ${availableBatteries.length}`}
+                  valueColor={Colors.statusActive}
+                  backgroundColor={Colors.surfaceGreen}
+                  icon="checkmark-circle-outline"
+                  onPress={() => setActiveFilter('available')}
+                />
+              </View>
+              <View style={styles.kpiRow}>
+                <KPICard
+                  label="IN USE"
+                  value={vehicles?.filter((v) => v.status === 'In Use').length ?? 0}
+                  valueColor={Colors.brandTeal}
+                  backgroundColor={Colors.surfaceTeal}
+                  icon="radio-button-on-outline"
+                  onPress={() => setActiveFilter('active')}
+                />
+                <KPICard
+                  label="INACTIVE"
+                  value={`Sc - ${inactiveVehicles.length + maintenanceVehicles.length}, Bat - ${mainBatteries.length}`}
+                  valueColor={Colors.statusError}
+                  backgroundColor={Colors.surfaceRed}
+                  icon="construct-outline"
+                  onPress={() => setActiveFilter('maintenance')}
+                />
+              </View>
             </View>
+
 
             <View style={styles.filterRow}>
               {FILTER_PILLS.map((f) => (
@@ -210,7 +215,9 @@ const styles = StyleSheet.create({
   content: { padding: Spacing.md, gap: Spacing.md, paddingBottom: 100 },
   headerRow: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'flex-start' },
   syncBadge: { flexDirection: 'row', alignItems: 'center', backgroundColor: Colors.surfaceCard, borderRadius: Radius.pill, borderWidth: 1, borderColor: Colors.borderLight, paddingHorizontal: 8, paddingVertical: 4 },
-  kpiGrid:   { flexDirection: 'row', flexWrap: 'wrap', gap: Spacing.sm },
+  kpiGrid:   { gap: Spacing.sm },
+  kpiRow:    { flexDirection: 'row', gap: Spacing.sm },
+
   filterRow: { flexDirection: 'row', gap: Spacing.sm, flexWrap: 'wrap' },
   filterPill: { paddingHorizontal: 12, paddingVertical: 6, borderRadius: Radius.pill, borderWidth: 1, borderColor: Colors.borderLight, backgroundColor: Colors.surfaceCard },
   filterPillActive: { borderColor: Colors.brandTeal, backgroundColor: Colors.surfaceTeal },

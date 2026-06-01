@@ -105,30 +105,35 @@ export default function OverviewScreen() {
           <>
             {/* ── KPI Grid 2×2 ──────────────────────────────────────────── */}
             <View style={styles.kpiGrid}>
-              <KPICard
-                label="ACTIVE BOOKINGS"
-                value={activeBookings}
-                accentColor={Colors.brandTeal}
-                icon="bicycle-outline"
-              />
-              <KPICard
-                label="VEHICLES IDLE"
-                value={vehiclesIdle}
-                accentColor={Colors.statusActive}
-                icon="car-outline"
-              />
-              <KPICard
-                label="TOTAL BOOKINGS"
-                value={totalBookings}
-                icon="document-text-outline"
-              />
-              <KPICard
-                label="PENDING (₹)"
-                value={paymentsPending > 0 ? formatCurrency(paymentsPending) : '₹0'}
-                accentColor={paymentsPending > 0 ? Colors.statusWarning : undefined}
-                icon="card-outline"
-              />
+              <View style={styles.kpiRow}>
+                <KPICard
+                  label="ACTIVE BOOKINGS"
+                  value={activeBookings}
+                  accentColor={Colors.brandTeal}
+                  icon="bicycle-outline"
+                />
+                <KPICard
+                  label="VEHICLES IDLE"
+                  value={vehiclesIdle}
+                  accentColor={Colors.statusActive}
+                  icon="car-outline"
+                />
+              </View>
+              <View style={styles.kpiRow}>
+                <KPICard
+                  label="TOTAL BOOKINGS"
+                  value={totalBookings}
+                  icon="document-text-outline"
+                />
+                <KPICard
+                  label="PENDING DUES"
+                  value={paymentsPending > 0 ? formatShortCurrency(paymentsPending) : '₹0'}
+                  accentColor={paymentsPending > 0 ? Colors.statusWarning : undefined}
+                  icon="card-outline"
+                />
+              </View>
             </View>
+
 
             {/* ── Rental Goal Progress ──────────────────────────────────── */}
             <View style={styles.goalCard}>
@@ -231,6 +236,16 @@ export default function OverviewScreen() {
   );
 }
 
+function formatShortCurrency(amount: number): string {
+  if (amount >= 1000) {
+    const kAmount = amount / 1000;
+    const formatted = kAmount % 1 === 0 ? kAmount.toFixed(0) : kAmount.toFixed(1);
+    return `₹${formatted}K`;
+  }
+  return `₹${amount}`;
+}
+
+
 const styles = StyleSheet.create({
   safe:    { flex: 1, backgroundColor: Colors.bgApp },
   scroll:  { flex: 1 },
@@ -243,10 +258,13 @@ const styles = StyleSheet.create({
   },
 
   kpiGrid: {
-    flexDirection: 'row',
-    flexWrap: 'wrap',
     gap: Spacing.sm,
   },
+  kpiRow: {
+    flexDirection: 'row',
+    gap: Spacing.sm,
+  },
+
 
   goalCard: {
     backgroundColor: Colors.surfaceCard,

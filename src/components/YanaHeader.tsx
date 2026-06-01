@@ -9,6 +9,7 @@ import React from 'react';
 import { Pressable, StyleSheet, Text, View } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { Colors, Spacing, Typography } from '../constants/design';
+import { YanaLogo } from './YanaLogo';
 
 interface YanaHeaderProps {
   storeName?: string;
@@ -21,15 +22,16 @@ export function YanaHeader({ storeName, role, onSignOut }: YanaHeaderProps) {
 
   return (
     <View style={[styles.header, { paddingTop: Math.max(insets.top, 10) }]}>
-      {/* Wordmark */}
+      {/* Wordmark logo */}
       <View style={styles.left}>
-        <Text style={styles.wordmark}>YANA</Text>
+        <YanaLogo width={90} height={24} color={Colors.brandTeal} />
         {storeName && (
           <Text style={styles.storeName} numberOfLines={1}>
             {storeName}
           </Text>
         )}
       </View>
+
 
       {/* Right: role badge + sign out */}
       <View style={styles.right}>
