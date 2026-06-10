@@ -226,7 +226,7 @@ export function ChecklistModal({
               {checklistType === 'return' ? 'Return Checklist' : 'Pause Checklist'}
             </Text>
             <Text style={styles.headerSub}>
-              {booking.vehicle.plate_number} · {booking.customer.name}
+              {booking.vehicle?.plate_number ?? 'No Vehicle'} · {booking.customer.name}
             </Text>
           </View>
           <Pressable onPress={handleClose} hitSlop={12} style={styles.closeBtn}>

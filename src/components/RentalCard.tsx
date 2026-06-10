@@ -87,11 +87,11 @@ export function RentalCard({ booking, onDispatch, onCollectCash, onPause, onResu
       <View style={styles.metaRow}>
         <View style={styles.assetChip}>
           <Ionicons name="bicycle-outline" size={11} color={Colors.brandTeal} />
-          <Text style={styles.assetChipText}>{booking.vehicle.plate_number}</Text>
+          <Text style={styles.assetChipText}>{booking.vehicle?.plate_number ?? 'No Vehicle'}</Text>
         </View>
         <View style={styles.assetChip}>
           <Ionicons name="battery-charging-outline" size={11} color={Colors.brandTeal} />
-          <Text style={styles.assetChipText}>{booking.battery.serial_number}</Text>
+          <Text style={styles.assetChipText}>{booking.battery?.serial_number ?? 'No Battery'}</Text>
         </View>
         <View style={{ flex: 1 }} />
         <Text style={styles.nodeId}>#{toNodeId(booking.id)}</Text>

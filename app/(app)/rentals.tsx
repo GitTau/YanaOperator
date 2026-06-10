@@ -160,8 +160,8 @@ export default function RentalsScreen() {
     return byStatus.filter(b =>
       b.customer.name.toLowerCase().includes(q) ||
       b.customer.phone.includes(q) ||
-      b.vehicle.plate_number.toLowerCase().includes(q) ||
-      b.battery.serial_number.toLowerCase().includes(q),
+      (b.vehicle?.plate_number ?? '').toLowerCase().includes(q) ||
+      (b.battery?.serial_number ?? '').toLowerCase().includes(q)
     );
   }, [bookings, statusFilter, search, boardView]);
 

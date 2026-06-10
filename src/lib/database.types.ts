@@ -106,8 +106,8 @@ export interface Booking {
 // Booking with joined customer + vehicle + battery data (for rental cards)
 export interface BookingWithDetails extends Booking {
   customer: Customer;
-  vehicle: Vehicle;
-  battery: Battery;
+  vehicle: Vehicle | null;
+  battery: Battery | null;
 }
 
 // ── maintenance_jobs ─────────────────────────────────────────────────────────
@@ -120,6 +120,50 @@ export interface MaintenanceJob {
   resolution_notes: string | null;
   created_at: string;
   closed_at: string | null;
+  // Repair cost fields (added v1.9)
+  labour_cost: number;
+  parts_cost: number;
+  parts_used: PartUsed[];
+  resolved_at: string | null;
+  resolved_by: string | null;
+}
+
+export interface PartUsed {
+  part_id: string;
+  part_name: string;
+  qty: number;
+  unit_cost: number;
+}
+
+// ── parts_inventory ───────────────────────────────────────────────────────────
+export interface PartsInventory {
+  id: string;
+  part_name: string;
+  problem_description: string;
+  subpart: string;
+  base_price: number;
+  gst_amount: number;
+  total_price: number;
+  /** Last-entered cost by operator. Updated each time a repair is logged. */
+  assumed_cost: number;
+  stock_qty: number;
+  created_at: string;
+}
+
+// ── vehicle_checklists ────────────────────────────────────────────────────────
+export interface VehicleChecklist {
+  id: string;
+  vehicle_id: string;
+  store_id: string;
+  booking_id: string | null;
+  /** 'return' | 'pause' | 'maintenance' */
+  flow: string;
+  /** { [item_key]: 'ok' | 'issue' | 'damaged' } */
+  item_states: Record<string, string>;
+  /** { [item_key]: string } */
+  item_notes: Record<string, string>;
+  submitted_by: string | null;
+  submitted_at: string;
 }
 
 // ── global_config (singleton, id=1) ─────────────────────────────────────────
@@ -180,16 +224,19 @@ export interface SwapAssetsParams {
 export interface Database {
   public: {
     Tables: {
-      stores: { Row: Store; Insert: Omit<Store, 'store_id' | 'created_at'>; Update: Partial<Store> };
-      profiles: { Row: Profile; Insert: Omit<Profile, 'created_at'>; Update: Partial<Profile> };
-      vehicles: { Row: Vehicle; Insert: Omit<Vehicle, 'id' | 'created_at'>; Update: Partial<Vehicle> };
-      batteries: { Row: Battery; Insert: Omit<Battery, 'id' | 'created_at'>; Update: Partial<Battery> };
-      customers: { Row: Customer; Insert: Omit<Customer, 'id' | 'created_at'>; Update: Partial<Customer> };
-      bookings: { Row: Booking; Insert: Omit<Booking, 'id' | 'created_at'>; Update: Partial<Booking> };
-      maintenance_jobs: { Row: MaintenanceJob; Insert: Omit<MaintenanceJob, 'id' | 'created_at'>; Update: Partial<MaintenanceJob> };
-      global_config: { Row: GlobalConfig; Insert: Omit<GlobalConfig, 'updated_at'>; Update: Partial<GlobalConfig> };
-      audit_logs: { Row: AuditLog; Insert: Omit<AuditLog, 'id' | 'timestamp'>; Update: Partial<AuditLog> };
+      stores: { Row: Store; Insert: Omit<Store, 'store_id' | 'created_at'>; Update: Partial<Store>; Relationships: [] };
+      profiles: { Row: Profile; Insert: Omit<Profile, 'created_at'>; Update: Partial<Profile>; Relationships: [] };
+      vehicles: { Row: Vehicle; Insert: Omit<Vehicle, 'id' | 'created_at'>; Update: Partial<Vehicle>; Relationships: [] };
+      batteries: { Row: Battery; Insert: Omit<Battery, 'id' | 'created_at'>; Update: Partial<Battery>; Relationships: [] };
+      customers: { Row: Customer; Insert: Omit<Customer, 'id' | 'created_at'>; Update: Partial<Customer>; Relationships: [] };
+      bookings: { Row: Booking; Insert: Omit<Booking, 'id' | 'created_at'>; Update: Partial<Booking>; Relationships: [] };
+      maintenance_jobs: { Row: MaintenanceJob; Insert: Omit<MaintenanceJob, 'id' | 'created_at'>; Update: Partial<MaintenanceJob>; Relationships: [] };
+      parts_inventory: { Row: PartsInventory; Insert: Omit<PartsInventory, 'id' | 'created_at'>; Update: Partial<PartsInventory>; Relationships: [] };
+      vehicle_checklists: { Row: VehicleChecklist; Insert: Omit<VehicleChecklist, 'id' | 'submitted_at'>; Update: Partial<VehicleChecklist>; Relationships: [] };
+      global_config: { Row: GlobalConfig; Insert: Omit<GlobalConfig, 'updated_at'>; Update: Partial<GlobalConfig>; Relationships: [] };
+      audit_logs: { Row: AuditLog; Insert: Omit<AuditLog, 'id' | 'timestamp'>; Update: Partial<AuditLog>; Relationships: [] };
     };
+    Views: Record<string, never>;
     Functions: {
       create_booking: { Args: CreateBookingParams; Returns: string };
       record_payment: { Args: RecordPaymentParams; Returns: void };
@@ -205,5 +252,6 @@ export interface Database {
       user_role: UserRole;
       log_type: LogType;
     };
+    CompositeTypes: Record<string, never>;
   };
 }

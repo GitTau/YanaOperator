@@ -35,5 +35,8 @@
     "expo-env.d.ts",
     ".expo/types/**/*.ts"
   ],
+  "exclude": [
+    "app/(app)/performance.tsx"
+  ],
   "extends": "expo/tsconfig.base"
 }

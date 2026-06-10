@@ -181,3 +181,77 @@ export function useChecklistTemplate(flow: 'return' | 'pause') {
     },
   });
 }
+
+// ── Maintenance Vehicles — vehicles under Maintenance or Inactive (Dead) ──────
+export function useMaintenanceVehicles(storeId: string | null) {
+  return useQuery({
+    queryKey: ['maintenance_vehicles', storeId ?? ''] as const,
+    enabled: !!storeId,
+    refetchInterval: POLL_INTERVAL,
+    queryFn: async () => {
+      const { data, error } = await supabase
+        .from('vehicles')
+        .select('*')
+        .eq('store_id', storeId as string)
+        .in('status', ['Maintenance', 'Inactive'])
+        .order('plate_number');
+      if (error) throw new Error(error.message);
+      return data ?? [];
+    },
+  });
+}
+
+// ── Parts Inventory — all parts (global catalog) ──────────────────────────────
+export function usePartsInventory() {
+  return useQuery({
+    queryKey: ['parts_inventory'] as const,
+    staleTime: 5 * 60 * 1000, // 5 min — changes rarely between repairs
+    queryFn: async () => {
+      const { data, error } = await supabase
+        .from('parts_inventory')
+        .select('*')
+        .order('part_name', { ascending: true });
+      if (error) throw new Error(error.message);
+      return data ?? [];
+    },
+  });
+}
+
+// ── Vehicle Latest Checklist — most recent checklist row for a vehicle ─────────
+export function useVehicleLatestChecklist(vehicleId: string | null) {
+  return useQuery({
+    queryKey: ['vehicle_latest_checklist', vehicleId ?? ''] as const,
+    enabled: !!vehicleId,
+    queryFn: async () => {
+      const { data, error } = await supabase
+        .from('vehicle_checklists')
+        .select('*')
+        .eq('vehicle_id', vehicleId as string)
+        .order('submitted_at', { ascending: false })
+        .limit(1)
+        .maybeSingle();
+      if (error) throw new Error(error.message);
+      return data; // null if no checklist history
+    },
+  });
+}
+
+// ── Open Maintenance Tickets — per store ──────────────────────────────────────
+export function useOpenMaintenanceTickets(storeId: string | null) {
+  return useQuery({
+    queryKey: ['open_maintenance_tickets', storeId ?? ''] as const,
+    enabled: !!storeId,
+    refetchInterval: POLL_INTERVAL,
+    queryFn: async () => {
+      const { data, error } = await supabase
+        .from('maintenance_jobs')
+        .select('*, vehicle:vehicles(plate_number, status)')
+        .eq('store_id', storeId as string)
+        .neq('status', 'Closed')
+        .order('created_at', { ascending: false });
+      if (error) throw new Error(error.message);
+      return data ?? [];
+    },
+  });
+}
+

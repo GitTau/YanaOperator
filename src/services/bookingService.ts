@@ -290,3 +290,121 @@ export function formatCurrency(amount: number): string {
 export function toNodeId(uuid: string): string {
   return uuid.slice(-4).toUpperCase();
 }
+
+// ─────────────────────────────────────────────────────────────────────────────
+// Maintenance Service Functions (v1.9)
+// ─────────────────────────────────────────────────────────────────────────────
+
+// ── Update vehicle status (Maintenance operations only) ───────────────────────
+// Allowed transitions: Available ↔ Maintenance, Available ↔ Inactive.
+// 'In Use' is NEVER set here — that's handled by dispatchBooking.
+export async function updateVehicleStatus(
+  vehicleId: string,
+  status: 'Available' | 'Maintenance' | 'Inactive',
+): Promise<void> {
+  const { error } = await supabase
+    .from('vehicles')
+    .update({ status })
+    .eq('id', vehicleId);
+  if (error) throw new Error(`Vehicle status update failed: ${error.message}`);
+}
+
+// ── Save vehicle checklist (maintenance / return / pause flows) ───────────────
+export async function saveVehicleChecklist(params: {
+  vehicleId: string;
+  storeId: string;
+  bookingId: string | null;
+  flow: 'return' | 'pause' | 'maintenance';
+  itemStates: Record<string, string>;
+  itemNotes: Record<string, string>;
+  submittedBy: string | null;
+}): Promise<string> {
+  const { data, error } = await supabase
+    .from('vehicle_checklists')
+    .insert({
+      vehicle_id:  params.vehicleId,
+      store_id:    params.storeId,
+      booking_id:  params.bookingId,
+      flow:        params.flow,
+      item_states: params.itemStates,
+      item_notes:  params.itemNotes,
+      submitted_by: params.submittedBy,
+    })
+    .select('id')
+    .single();
+  if (error) throw new Error(`Save checklist failed: ${error.message}`);
+  return data.id;
+}
+
+// ── Open a maintenance ticket for a vehicle ───────────────────────────────────
+export async function openMaintenanceTicket(params: {
+  vehicleId: string;
+  storeId: string;
+  description: string;
+}): Promise<string> {
+  const { data, error } = await supabase
+    .from('maintenance_jobs')
+    .insert({
+      vehicle_id:  params.vehicleId,
+      store_id:    params.storeId,
+      status:      'Open',
+      description: params.description,
+      labour_cost: 0,
+      parts_cost:  0,
+      parts_used:  [],
+    })
+    .select('id')
+    .single();
+  if (error) throw new Error(`Open maintenance ticket failed: ${error.message}`);
+  return data.id;
+}
+
+// ── Log repair cost, deduct parts, and close ticket → vehicle goes Available ──
+export async function logRepairAndClose(params: {
+  ticketId: string;
+  vehicleId: string;
+  labourCost: number;
+  partsCost: number;
+  partsUsed: Array<{ part_id: string; part_name: string; qty: number; unit_cost: number }>;
+  resolutionNotes: string;
+  resolvedBy: string | null;
+}): Promise<void> {
+  // Step 1: Close the maintenance ticket with cost data
+  const { error: ticketError } = await supabase
+    .from('maintenance_jobs')
+    .update({
+      status:           'Closed',
+      labour_cost:      params.labourCost,
+      parts_cost:       params.partsCost,
+      parts_used:       params.partsUsed,
+      resolution_notes: params.resolutionNotes,
+      resolved_at:      new Date().toISOString(),
+      resolved_by:      params.resolvedBy,
+      closed_at:        new Date().toISOString(),
+    })
+    .eq('id', params.ticketId);
+  if (ticketError) throw new Error(`Close ticket failed: ${ticketError.message}`);
+
+  // Step 2: Deduct stock and update assumed_cost for each part used
+  for (const part of params.partsUsed) {
+    if (part.qty <= 0) continue;
+    // decrement_part_stock RPC: stock_qty = MAX(0, stock_qty - qty), assumed_cost = unit_cost
+    const { error: invError } = await supabase.rpc('decrement_part_stock', {
+      p_part_id: part.part_id,
+      p_qty:     part.qty,
+      p_cost:    part.unit_cost,
+    });
+    if (invError) {
+      // Non-fatal — log and continue (inventory deduct is best-effort for now)
+      console.warn(`[logRepairAndClose] Failed to deduct stock for part ${part.part_name}:`, invError.message);
+    }
+  }
+
+  // Step 3: Move vehicle back to Available
+  const { error: vehicleError } = await supabase
+    .from('vehicles')
+    .update({ status: 'Available' })
+    .eq('id', params.vehicleId);
+  if (vehicleError) throw new Error(`Release vehicle to Available failed: ${vehicleError.message}`);
+}
+

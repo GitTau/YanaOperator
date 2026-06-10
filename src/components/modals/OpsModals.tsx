@@ -71,7 +71,7 @@ export function PauseModal({ visible, booking, onClose, onSuccess }: PauseModalP
 
           <View style={styles.warningBox}>
             <Text style={styles.warningText}>
-              ⚠ This will release {booking.vehicle.plate_number} back to the fleet immediately.
+              ⚠ This will release {booking.vehicle?.plate_number ?? 'No Vehicle'} back to the fleet immediately.
               The rider will need to collect a new vehicle when they resume.
             </Text>
           </View>
@@ -152,7 +152,7 @@ export function ReturnModal({ visible, booking, onClose, onSuccess, damageFines 
           </View>
 
           <Text style={[Typography.bodyPrimary, { color: Colors.textPrimary, fontWeight: '600', marginBottom: Spacing.md }]}>
-            {booking.customer.name} · {booking.vehicle.plate_number} · {booking.rental_plan}
+            {booking.customer.name} · {booking.vehicle?.plate_number ?? 'No Vehicle'} · {booking.rental_plan}
           </Text>
           <Divider />
 
@@ -289,7 +289,7 @@ export function SwapModal({ visible, booking, onClose, onSuccess, storeId, opera
             <Pressable onPress={handleClose} hitSlop={12}><Text style={styles.closeBtn}>✕</Text></Pressable>
           </View>
 
-          <Text style={styles.currentAssets}>Current: {booking.vehicle.plate_number} / {booking.battery.serial_number}</Text>
+          <Text style={styles.currentAssets}>Current: {booking.vehicle?.plate_number ?? 'No Vehicle'} / {booking.battery?.serial_number ?? 'No Battery'}</Text>
 
           <Text style={[Typography.labelCaps, styles.fieldLabel]}>NEW SCOOTER (optional)</Text>
           {availableVehicles.map((v) => (

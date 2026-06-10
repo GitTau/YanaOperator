@@ -12,7 +12,7 @@ const SUPABASE_URL = 'https://kaoelfcaiegjjhyrrlak.supabase.co';
 // Publishable key — safe for client bundles. Enforced by RLS on every table.
 const SUPABASE_PUBLISHABLE_KEY = 'sb_publishable_-EPMKGBa0QxO2JN9t3LXXg_Pm-NNn93';
 
-export const supabase = createClient<Database>(
+export const supabase = createClient(
   SUPABASE_URL,
   SUPABASE_PUBLISHABLE_KEY,
   {

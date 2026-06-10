@@ -1,0 +1,53 @@
+﻿S No,Problem,Subparts,Parts,Base Price,GST,Total,Fines
+44,Damaged/Missing,Front,Bearing,,0,0,0
+45,Handle Problem,NA,Bearing,,0,0,0
+,Handle Problem,NA,Handle loose,,0,0,0
+46,Missing/Damaged,NA,Bolts ,,0,0,0
+33,Breaks not working,Rear,Break Shoe,252,45.36,298,300
+34,Breaks not working,Front,Break Shoe,,,,0
+19,Break Wire Problem,Rear,Break Wire,150,27,177,200
+,Break Wire Problem,Front,Break Wire,,,,
+20,Break Wire Problem,Rear,NA,130,23.4,154,200
+9,(Horn/Light) Not Working,NA,Combination,335,60.3,396,400
+10,Switch Damaged,NA,Combination,335,60.3,396,400
+22,Motor not working,NA,Controller,3250,585,3835,1000
+5,Horn/Light Not Working,NA,Converter,335,60.3,396,400
+1,Drum Plate Cracked,Rear,Drum,530,95.4,626,650
+43,Drum Plate Cracked,Front,Drum,,0,0,0
+35,Missing/Damaged,IOT,GPS,1550,279,1829,1000
+36,Missing/Damaged,Sim,GPS,550,99,649,650
+42,Missing/Damaged,NA,Harness,,0,0,0
+,Missing/Damaged,NA,Headlight,475,85.5,561,600
+4,Headlight not working,NA,Headlight,475,85.5,561,600
+29,Horn Not Working,NA,Horn,200,36,236,250
+12,Lever is damaged/broken,Left,Lever Set,380,68.4,449,450
+13,Clutch yolk is damaged,Left,Lever Set,380,68.4,449,450
+14,Lever is damaged/broken,Right,Lever Set,380,68.4,449,450
+15,Clutch yolk is damaged,Right,Lever Set,380,68.4,449,450
+32,Seat Not Locking,Cable,Lock Seat,,,,0
+,Seat Not Locking,Hook+Catcher,Lock Set,150,27,177,200
+7,Ignition Not working,NA,Lock Set,380,68.4,449,450
+8,Key Missing,NA,Lock Set,380,68.4,449,450
+16,MCB Damaged/Missing,NA,MCB,150,27,177,200
+17,MCB  Switch Broken/Stuck,NA,MCB,150,27,177,200
+21,Motor Not Working/Stuck/Plate Cracked,NA,Motor,5000,900,5900,1000
+37,Missing/Damaged,Front,Mud Guard,400,72,472,500
+38,Missing/Damaged,Rear,Mud Guard,400,72,472,500
+39,Missing/Damaged,Front,Mud Guard Stay,90,16.2,107,150
+40,Missing/Damaged,Rear,Mud Guard Stay,90,16.2,107,150
+47,Cleanliness Fine,NA,NA,0,0,0,50
+48,Asset Discarded without Supervision Fine,NA,NA,0,0,0,1000
+49,Swapping of Assets between Two Riders Fine,NA,NA,0,0,0,300
+50,Complete Asset Missing/Stolen,NA,NA,0,0,0,1000
+11,Missing/Damaged,NA,Number Plate,70,12.6,83,100
+41,Missing/Damaged,NA,Seat ,,0,0,0
+30,Missing/Damaged,NA,Side Stand,,0,0,0
+31,Missing/Damaged,NA,Side Stand Spring,80,14.4,95,100
+18,Missing/Damaged,NA,SOC,350,63,413,450
+6,Tail Light Not Working,NA,Tail Light,300,54,354,400
+3,Throttle Problem,NA,Throttle,335,60.3,396,400
+23,Puncture,NA,Tire,100,18,118,150
+24,Tyre Burnout/Damaged,NA,Tire,1350,243,1593,1000
+25,Missing/Damaged,NA,Tire,,,,1000
+26,Front Valve Replacement,Front,Valve,250,45,295,300
+27,Rear Valve Replacement,Rear,Valve,250,45,295,300

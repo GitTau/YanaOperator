@@ -111,11 +111,13 @@ export default function AppLayout() {
           </View>
         )}
       >
-        <Tabs.Screen name="index"    />
-        <Tabs.Screen name="rentals"  />
-        <Tabs.Screen name="fleet"    />
-        <Tabs.Screen name="payments" />
-        <Tabs.Screen name="riders"   />
+        <Tabs.Screen name="index"       />
+        <Tabs.Screen name="rentals"     />
+        <Tabs.Screen name="fleet"       />
+        <Tabs.Screen name="payments"    />
+        <Tabs.Screen name="riders"      />
+        {/* maintenance — hidden from tab bar, accessed via hamburger menu */}
+        <Tabs.Screen name="maintenance" options={{ href: null }} />
       </Tabs>
     </View>
   );

@@ -178,7 +178,7 @@ export default function OverviewScreen() {
                       {b.customer.name}
                     </Text>
                     <Text style={[Typography.bodySecondary, { color: Colors.textSecondary }]}>
-                      {b.vehicle.plate_number}
+                      {b.vehicle?.plate_number ?? 'No Vehicle'}
                     </Text>
                   </View>
                 ))}
@@ -211,7 +211,7 @@ export default function OverviewScreen() {
                           {b.customer.name}
                         </Text>
                         <Text style={[Typography.caption, { color: Colors.textSecondary }]}>
-                          {b.vehicle.plate_number} · {b.rental_plan}
+                          {b.vehicle?.plate_number ?? 'No Vehicle'} · {b.rental_plan}
                         </Text>
                       </View>
                       <View style={[

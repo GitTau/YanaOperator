@@ -1,14 +1,24 @@
 // ─────────────────────────────────────────────────────────────────────────────
 // YanaHeader — Global App Header
 // Appears on every screen post-login. Shows wordmark + store name + role badge.
+// v2: Adds hamburger menu (top-right) with Maintenance, Performance, Tasks items.
 // Safe-area aware: respects device top inset (notch / status bar).
-// Touch targets: sign-out button meets 44pt minimum via hitSlop.
 // ─────────────────────────────────────────────────────────────────────────────
 
-import React from 'react';
-import { Pressable, StyleSheet, Text, View } from 'react-native';
+import { Ionicons } from '@expo/vector-icons';
+import { router } from 'expo-router';
+import React, { useRef, useState } from 'react';
+import {
+  Animated,
+  Modal,
+  Pressable,
+  StyleSheet,
+  Text,
+  TouchableWithoutFeedback,
+  View,
+} from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
-import { Colors, Spacing, Typography } from '../constants/design';
+import { Colors, Radius, Spacing, Typography } from '../constants/design';
 import { YanaLogo } from './YanaLogo';
 
 interface YanaHeaderProps {
@@ -17,42 +27,140 @@ interface YanaHeaderProps {
   onSignOut?: () => void;
 }
 
+type MenuItemDef = {
+  id: string;
+  label: string;
+  icon: React.ComponentProps<typeof Ionicons>['name'];
+  route?: string;
+  isPlaceholder?: boolean;
+};
+
+const MENU_ITEMS: MenuItemDef[] = [
+  { id: 'maintenance', label: 'Maintenance',  icon: 'construct-outline',       route: '/(app)/maintenance' },
+  { id: 'performance', label: 'Performance',  icon: 'bar-chart-outline',        isPlaceholder: true },
+  { id: 'tasks',       label: 'Tasks',         icon: 'checkbox-outline',         isPlaceholder: true },
+];
+
 export function YanaHeader({ storeName, role, onSignOut }: YanaHeaderProps) {
   const insets = useSafeAreaInsets();
+  const [menuOpen, setMenuOpen] = useState(false);
+  const fadeAnim = useRef(new Animated.Value(0)).current;
+
+  const openMenu = () => {
+    setMenuOpen(true);
+    Animated.timing(fadeAnim, { toValue: 1, duration: 150, useNativeDriver: true }).start();
+  };
+
+  const closeMenu = () => {
+    Animated.timing(fadeAnim, { toValue: 0, duration: 120, useNativeDriver: true }).start(() =>
+      setMenuOpen(false),
+    );
+  };
+
+  const handleMenuItemPress = (item: MenuItemDef) => {
+    closeMenu();
+    if (item.isPlaceholder) return; // TODO: show toast when implemented
+    if (item.route) {
+      router.push(item.route as Parameters<typeof router.push>[0]);
+    }
+  };
 
   return (
-    <View style={[styles.header, { paddingTop: Math.max(insets.top, 10) }]}>
-      {/* Wordmark logo */}
-      <View style={styles.left}>
-        <YanaLogo width={90} height={24} color={Colors.brandTeal} />
-        {storeName && (
-          <Text style={styles.storeName} numberOfLines={1}>
-            {storeName}
-          </Text>
-        )}
-      </View>
+    <>
+      <View style={[styles.header, { paddingTop: Math.max(insets.top, 10) }]}>
+        {/* Wordmark logo */}
+        <View style={styles.left}>
+          <YanaLogo width={90} height={24} color={Colors.brandTeal} />
+          {storeName && (
+            <Text style={styles.storeName} numberOfLines={1}>
+              {storeName}
+            </Text>
+          )}
+        </View>
 
+        {/* Right: role badge + hamburger + sign out */}
+        <View style={styles.right}>
+          {role && (
+            <View style={styles.roleBadge}>
+              <Text style={styles.roleText}>{role}</Text>
+            </View>
+          )}
 
-      {/* Right: role badge + sign out */}
-      <View style={styles.right}>
-        {role && (
-          <View style={styles.roleBadge}>
-            <Text style={styles.roleText}>{role}</Text>
-          </View>
-        )}
-        {onSignOut && (
+          {/* Hamburger menu button */}
           <Pressable
-            onPress={onSignOut}
-            style={({ pressed }) => [styles.signOutBtn, { opacity: pressed ? 0.6 : 1 }]}
+            onPress={openMenu}
+            style={({ pressed }) => [styles.iconBtn, { opacity: pressed ? 0.6 : 1 }]}
             hitSlop={{ top: 12, bottom: 12, left: 12, right: 12 }}
-            accessibilityLabel="Sign out"
+            accessibilityLabel="Open menu"
             accessibilityRole="button"
           >
-            <Text style={styles.signOutText}>Sign out</Text>
+            <Ionicons name="menu-outline" size={22} color={Colors.textSecondary} />
           </Pressable>
-        )}
+
+          {onSignOut && (
+            <Pressable
+              onPress={onSignOut}
+              style={({ pressed }) => [styles.signOutBtn, { opacity: pressed ? 0.6 : 1 }]}
+              hitSlop={{ top: 12, bottom: 12, left: 12, right: 12 }}
+              accessibilityLabel="Sign out"
+              accessibilityRole="button"
+            >
+              <Text style={styles.signOutText}>Sign out</Text>
+            </Pressable>
+          )}
+        </View>
       </View>
-    </View>
+
+      {/* ── Hamburger Dropdown ─────────────────────────────────────────────── */}
+      {menuOpen && (
+        <Modal transparent animationType="none" visible={menuOpen} onRequestClose={closeMenu}>
+          <TouchableWithoutFeedback onPress={closeMenu}>
+            <View style={styles.backdrop} />
+          </TouchableWithoutFeedback>
+          <Animated.View style={[styles.dropdown, { opacity: fadeAnim }]}>
+            {MENU_ITEMS.map((item, idx) => (
+              <Pressable
+                key={item.id}
+                style={({ pressed }) => [
+                  styles.menuItem,
+                  idx < MENU_ITEMS.length - 1 && styles.menuItemBorder,
+                  { opacity: pressed ? 0.7 : 1 },
+                ]}
+                onPress={() => handleMenuItemPress(item)}
+              >
+                <View
+                  style={[
+                    styles.menuIconWrap,
+                    { backgroundColor: item.isPlaceholder ? Colors.bgApp : `${Colors.brandTeal}15` },
+                  ]}
+                >
+                  <Ionicons
+                    name={item.icon}
+                    size={16}
+                    color={item.isPlaceholder ? Colors.textMuted : Colors.brandTeal}
+                  />
+                </View>
+                <Text
+                  style={[
+                    styles.menuLabel,
+                    item.isPlaceholder && { color: Colors.textMuted },
+                  ]}
+                >
+                  {item.label}
+                </Text>
+                {item.isPlaceholder ? (
+                  <View style={styles.soonBadge}>
+                    <Text style={styles.soonText}>SOON</Text>
+                  </View>
+                ) : (
+                  <Ionicons name="chevron-forward" size={14} color={Colors.textMuted} />
+                )}
+              </Pressable>
+            ))}
+          </Animated.View>
+        </Modal>
+      )}
+    </>
   );
 }
 
@@ -66,15 +174,10 @@ const styles = StyleSheet.create({
     borderBottomColor: Colors.borderLight,
     paddingHorizontal: Spacing.md,
     paddingBottom: 12,
+    zIndex: 10,
   },
   left: {
     flex: 1,
-  },
-  wordmark: {
-    fontSize: 22,
-    fontWeight: '900',
-    color: Colors.brandCyan,
-    letterSpacing: 2,
   },
   storeName: {
     ...Typography.bodySecondary,
@@ -84,7 +187,7 @@ const styles = StyleSheet.create({
   right: {
     flexDirection: 'row',
     alignItems: 'center',
-    gap: 10,
+    gap: 8,
   },
   roleBadge: {
     backgroundColor: Colors.bgApp,
@@ -98,6 +201,10 @@ const styles = StyleSheet.create({
     ...Typography.badgeText,
     color: Colors.textSecondary,
   },
+  iconBtn: {
+    paddingHorizontal: 4,
+    paddingVertical: 4,
+  },
   signOutBtn: {
     paddingHorizontal: 6,
     paddingVertical: 4,
@@ -106,5 +213,66 @@ const styles = StyleSheet.create({
     ...Typography.bodySecondary,
     color: Colors.statusOverdue,
     fontWeight: '600',
+  },
+
+  // ── Dropdown ──────────────────────────────────────────────────────────────
+  backdrop: {
+    position: 'absolute',
+    top: 0, left: 0, right: 0, bottom: 0,
+  },
+  dropdown: {
+    position: 'absolute',
+    top: 72,
+    right: Spacing.md,
+    width: 210,
+    backgroundColor: Colors.surfaceCard,
+    borderRadius: Radius.modal,
+    borderWidth: 1,
+    borderColor: Colors.borderLight,
+    shadowColor: '#0f172a',
+    shadowOffset: { width: 0, height: 8 },
+    shadowOpacity: 0.12,
+    shadowRadius: 16,
+    elevation: 12,
+    overflow: 'hidden',
+  },
+  menuItem: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    paddingHorizontal: Spacing.md,
+    paddingVertical: 13,
+    gap: 10,
+  },
+  menuItemBorder: {
+    borderBottomWidth: 1,
+    borderBottomColor: Colors.borderLight,
+  },
+  menuIconWrap: {
+    width: 30,
+    height: 30,
+    borderRadius: Radius.sm,
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  menuLabel: {
+    flex: 1,
+    ...Typography.bodyPrimary,
+    fontWeight: '600',
+    color: Colors.textPrimary,
+    fontSize: 13,
+  },
+  soonBadge: {
+    backgroundColor: Colors.bgApp,
+    borderRadius: 6,
+    paddingHorizontal: 6,
+    paddingVertical: 2,
+    borderWidth: 1,
+    borderColor: Colors.borderLight,
+  },
+  soonText: {
+    fontSize: 8,
+    fontWeight: '800',
+    color: Colors.textMuted,
+    letterSpacing: 0.5,
   },
 });

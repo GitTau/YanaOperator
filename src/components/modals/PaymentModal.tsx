@@ -124,7 +124,7 @@ export function PaymentModal({
               {booking.customer.name}
             </Text>
             <Text style={[Typography.bodySecondary, { color: Colors.textSecondary }]}>
-              {booking.rental_plan} · {booking.vehicle.plate_number}
+              {booking.rental_plan} · {booking.vehicle?.plate_number ?? 'No Vehicle'}
             </Text>
           </View>
 

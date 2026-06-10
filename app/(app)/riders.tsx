@@ -191,7 +191,7 @@ function RiderDetail({
         {activeBooking && (
           <View style={styles.activeBookingBar}>
             <Text style={[Typography.badgeText, { color: Colors.statusActive }]}>
-              🟢 ACTIVE — {activeBooking.vehicle.plate_number} · {activeBooking.rental_plan}
+              🟢 ACTIVE — {activeBooking.vehicle?.plate_number ?? 'No Vehicle'} · {activeBooking.rental_plan}
             </Text>
           </View>
         )}
