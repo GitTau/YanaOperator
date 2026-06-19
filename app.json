@@ -11,7 +11,9 @@
       "resizeMode": "contain",
       "backgroundColor": "#F2F4F7"
     },
-    "assetBundlePatterns": ["**/*"],
+    "assetBundlePatterns": [
+      "**/*"
+    ],
     "ios": {
       "supportsTablet": true,
       "bundleIdentifier": "com.yana.operator"
@@ -28,16 +30,28 @@
     },
     "plugins": [
       "expo-router",
-      "expo-font"
+      "expo-font",
+      "expo-sharing"
     ],
     "extra": {
       "SUPABASE_URL": "https://kaoelfcaiegjjhyrrlak.supabase.co",
-      "SUPABASE_PUBLISHABLE_KEY": "sb_publishable_-EPMKGBa0QxO2JN9t3LXXg_Pm-NNn93"
+      "SUPABASE_PUBLISHABLE_KEY": "sb_publishable_-EPMKGBa0QxO2JN9t3LXXg_Pm-NNn93",
+      "router": {},
+      "eas": {
+        "projectId": "99e37bb8-f90b-41f0-918d-b74ab582b341"
+      }
     },
     "scheme": "yanaoperator",
     "experiments": {
       "typedRoutes": true
     },
-    "sdkVersion": "55.0.0"
+    "sdkVersion": "55.0.0",
+    "owner": "tauyanaexo",
+    "runtimeVersion": {
+      "policy": "appVersion"
+    },
+    "updates": {
+      "url": "https://u.expo.dev/99e37bb8-f90b-41f0-918d-b74ab582b341"
+    }
   }
 }

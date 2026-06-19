@@ -291,6 +291,8 @@ interface RepairPartsModalProps {
   storeId: string;
   /** Pre-populated damaged item states from Step 1 or from DB checklist */
   damagedItemStates?: Record<string, string>;
+  ticketId?: string;
+  ticketDescription?: string;
   onClose: () => void;
   onPartsSelected: (vehicle: Vehicle, ticketId: string, selectedParts: PartSelection[]) => void;
 }
@@ -300,6 +302,8 @@ export function RepairPartsModal({
   vehicle,
   storeId,
   damagedItemStates,
+  ticketId,
+  ticketDescription,
   onClose,
   onPartsSelected,
 }: RepairPartsModalProps) {
@@ -377,24 +381,27 @@ export function RepairPartsModal({
     if (submitting) return;
     setSubmitting(true);
     try {
-      // Open a maintenance ticket
-      const description = damagedKeys.length > 0
-        ? `Damaged/Issue parts flagged: ${damagedKeys.join(', ')}`
-        : 'Manual maintenance check';
-      const ticketId = await openMaintenanceTicket({
-        vehicleId:   vehicle.id,
-        storeId,
-        description,
-      });
-      queryClient.invalidateQueries({ queryKey: ['open_maintenance_tickets', storeId] });
+      let finalTicketId = ticketId;
+      if (!finalTicketId) {
+        // Only open a maintenance ticket if one doesn't exist yet
+        const description = damagedKeys.length > 0
+          ? `Damaged/Issue parts flagged: ${damagedKeys.join(', ')}`
+          : 'Manual maintenance check';
+        finalTicketId = await openMaintenanceTicket({
+          vehicleId:   vehicle.id,
+          storeId,
+          description,
+        });
+        queryClient.invalidateQueries({ queryKey: ['open_maintenance_tickets', storeId] });
+      }
       handleClose();
-      onPartsSelected(vehicle, ticketId, selectedList);
+      onPartsSelected(vehicle, finalTicketId, selectedList);
     } catch (err) {
-      Alert.alert('Error', err instanceof Error ? err.message : 'Failed to open ticket.');
+      Alert.alert('Error', err instanceof Error ? err.message : 'Failed to process ticket.');
     } finally {
       setSubmitting(false);
     }
-  }, [submitting, damagedKeys, vehicle, storeId, selectedList]);
+  }, [submitting, ticketId, damagedKeys, vehicle, storeId, selectedList]);
 
   const isLoading = partsLoading || checklistLoading;
 
@@ -413,14 +420,22 @@ export function RepairPartsModal({
           </Pressable>
         </View>
 
-        {/* Damaged parts banner */}
-        {damagedKeys.length > 0 && (
-          <View style={styles.damagedBanner}>
-            <Ionicons name="warning-outline" size={14} color={Colors.statusWarning} style={{ marginRight: 6 }} />
-            <Text style={styles.damagedBannerText}>
-              {damagedKeys.length} part{damagedKeys.length > 1 ? 's' : ''} flagged from last checklist
-            </Text>
+        {/* Reported issues from ticket */}
+        {ticketDescription ? (
+          <View style={styles.ticketDescBanner}>
+            <Text style={styles.ticketDescBannerTitle}>Reported Damages / Issues</Text>
+            <Text style={styles.ticketDescBannerText}>{ticketDescription}</Text>
           </View>
+        ) : (
+          /* Damaged parts banner fallback */
+          damagedKeys.length > 0 && (
+            <View style={styles.damagedBanner}>
+              <Ionicons name="warning-outline" size={14} color={Colors.statusWarning} style={{ marginRight: 6 }} />
+              <Text style={styles.damagedBannerText}>
+                {damagedKeys.length} part{damagedKeys.length > 1 ? 's' : ''} flagged from last checklist
+              </Text>
+            </View>
+          )
         )}
 
         {/* Search + toggle */}
@@ -815,6 +830,19 @@ const styles = StyleSheet.create({
     borderBottomWidth: 1, borderBottomColor: '#FDE68A',
   },
   damagedBannerText: { ...Typography.caption, color: Colors.statusWarning, fontWeight: '700' },
+
+  ticketDescBanner: {
+    backgroundColor: Colors.brandNavy,
+    paddingHorizontal: Spacing.md, paddingVertical: 10,
+    borderBottomWidth: 1, borderBottomColor: Colors.brandTeal,
+  },
+  ticketDescBannerTitle: {
+    fontSize: 9, fontWeight: '800', letterSpacing: 0.8,
+    color: Colors.brandTeal, textTransform: 'uppercase', marginBottom: 2
+  },
+  ticketDescBannerText: {
+    ...Typography.bodySecondary, color: '#fff', fontSize: 12, fontWeight: '600'
+  },
 
   // Search row
   searchRow: {

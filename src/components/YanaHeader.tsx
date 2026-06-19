@@ -39,6 +39,7 @@ const MENU_ITEMS: MenuItemDef[] = [
   { id: 'maintenance', label: 'Maintenance',  icon: 'construct-outline',       route: '/(app)/maintenance' },
   { id: 'performance', label: 'Performance',  icon: 'bar-chart-outline',        isPlaceholder: true },
   { id: 'tasks',       label: 'Tasks',         icon: 'checkbox-outline',         isPlaceholder: true },
+  { id: 'signout',     label: 'Sign Out',      icon: 'log-out-outline' },
 ];
 
 export function YanaHeader({ storeName, role, onSignOut }: YanaHeaderProps) {
@@ -59,6 +60,10 @@ export function YanaHeader({ storeName, role, onSignOut }: YanaHeaderProps) {
 
   const handleMenuItemPress = (item: MenuItemDef) => {
     closeMenu();
+    if (item.id === 'signout') {
+      if (onSignOut) onSignOut();
+      return;
+    }
     if (item.isPlaceholder) return; // TODO: show toast when implemented
     if (item.route) {
       router.push(item.route as Parameters<typeof router.push>[0]);
@@ -78,7 +83,7 @@ export function YanaHeader({ storeName, role, onSignOut }: YanaHeaderProps) {
           )}
         </View>
 
-        {/* Right: role badge + hamburger + sign out */}
+        {/* Right: role badge + hamburger */}
         <View style={styles.right}>
           {role && (
             <View style={styles.roleBadge}>
@@ -94,20 +99,8 @@ export function YanaHeader({ storeName, role, onSignOut }: YanaHeaderProps) {
             accessibilityLabel="Open menu"
             accessibilityRole="button"
           >
-            <Ionicons name="menu-outline" size={22} color={Colors.textSecondary} />
+            <Ionicons name="menu-outline" size={24} color={Colors.textSecondary} />
           </Pressable>
-
-          {onSignOut && (
-            <Pressable
-              onPress={onSignOut}
-              style={({ pressed }) => [styles.signOutBtn, { opacity: pressed ? 0.6 : 1 }]}
-              hitSlop={{ top: 12, bottom: 12, left: 12, right: 12 }}
-              accessibilityLabel="Sign out"
-              accessibilityRole="button"
-            >
-              <Text style={styles.signOutText}>Sign out</Text>
-            </Pressable>
-          )}
         </View>
       </View>
 
@@ -118,45 +111,58 @@ export function YanaHeader({ storeName, role, onSignOut }: YanaHeaderProps) {
             <View style={styles.backdrop} />
           </TouchableWithoutFeedback>
           <Animated.View style={[styles.dropdown, { opacity: fadeAnim }]}>
-            {MENU_ITEMS.map((item, idx) => (
-              <Pressable
-                key={item.id}
-                style={({ pressed }) => [
-                  styles.menuItem,
-                  idx < MENU_ITEMS.length - 1 && styles.menuItemBorder,
-                  { opacity: pressed ? 0.7 : 1 },
-                ]}
-                onPress={() => handleMenuItemPress(item)}
-              >
-                <View
-                  style={[
-                    styles.menuIconWrap,
-                    { backgroundColor: item.isPlaceholder ? Colors.bgApp : `${Colors.brandTeal}15` },
+            {MENU_ITEMS.map((item, idx) => {
+              const isSignOut = item.id === 'signout';
+              return (
+                <Pressable
+                  key={item.id}
+                  style={({ pressed }) => [
+                    styles.menuItem,
+                    idx < MENU_ITEMS.length - 1 && styles.menuItemBorder,
+                    { opacity: pressed ? 0.7 : 1 },
                   ]}
+                  onPress={() => handleMenuItemPress(item)}
                 >
-                  <Ionicons
-                    name={item.icon}
-                    size={16}
-                    color={item.isPlaceholder ? Colors.textMuted : Colors.brandTeal}
-                  />
-                </View>
-                <Text
-                  style={[
-                    styles.menuLabel,
-                    item.isPlaceholder && { color: Colors.textMuted },
-                  ]}
-                >
-                  {item.label}
-                </Text>
-                {item.isPlaceholder ? (
-                  <View style={styles.soonBadge}>
-                    <Text style={styles.soonText}>SOON</Text>
+                  <View
+                    style={[
+                      styles.menuIconWrap,
+                      {
+                        backgroundColor: isSignOut
+                          ? '#FEE2E2'
+                          : item.isPlaceholder
+                          ? Colors.bgApp
+                          : `${Colors.brandTeal}15`,
+                      },
+                    ]}
+                  >
+                    <Ionicons
+                      name={item.icon}
+                      size={16}
+                      color={isSignOut ? Colors.statusError : item.isPlaceholder ? Colors.textMuted : Colors.brandTeal}
+                    />
                   </View>
-                ) : (
-                  <Ionicons name="chevron-forward" size={14} color={Colors.textMuted} />
-                )}
-              </Pressable>
-            ))}
+                  <Text
+                    style={[
+                      styles.menuLabel,
+                      isSignOut
+                        ? { color: Colors.statusError }
+                        : item.isPlaceholder && { color: Colors.textMuted },
+                    ]}
+                  >
+                    {item.label}
+                  </Text>
+                  {isSignOut ? (
+                    null
+                  ) : item.isPlaceholder ? (
+                    <View style={styles.soonBadge}>
+                      <Text style={styles.soonText}>SOON</Text>
+                    </View>
+                  ) : (
+                    <Ionicons name="chevron-forward" size={14} color={Colors.textMuted} />
+                  )}
+                </Pressable>
+              );
+            })}
           </Animated.View>
         </Modal>
       )}

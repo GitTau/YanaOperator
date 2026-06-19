@@ -51,7 +51,7 @@ import type { Vehicle } from '../../src/lib/database.types';
 type ModalStep =
   | { kind: 'none' }
   | { kind: 'checklist';  vehicle: Vehicle }
-  | { kind: 'parts';      vehicle: Vehicle; itemStates?: Record<string, string> }
+  | { kind: 'parts';      vehicle: Vehicle; itemStates?: Record<string, string>; ticketId?: string; ticketDescription?: string }
   | { kind: 'cost';       vehicle: Vehicle; ticketId: string; parts: PartSelection[] };
 
 const STATUS_COLOR: Record<string, string> = {
@@ -133,8 +133,12 @@ export default function MaintenanceScreen() {
 
   // ── Modal open handlers ───────────────────────────────────────────────────
   const openChecklistModal  = (v: Vehicle) => setModal({ kind: 'checklist', vehicle: v });
-  const openRepairPartsModal = (v: Vehicle, itemStates?: Record<string, string>) =>
-    setModal({ kind: 'parts', vehicle: v, itemStates });
+  const openRepairPartsModal = (
+    v: Vehicle,
+    itemStates?: Record<string, string>,
+    ticketId?: string,
+    ticketDescription?: string,
+  ) => setModal({ kind: 'parts', vehicle: v, itemStates, ticketId, ticketDescription });
 
   return (
     <SafeAreaView style={styles.safe}>
@@ -163,31 +167,6 @@ export default function MaintenanceScreen() {
           </View>
         ) : (
           <>
-            {/* ── KPI Row ─────────────────────────────────────────────────── */}
-            <View style={styles.kpiRow}>
-              <KPICard
-                label="MAINTENANCE"
-                value={underMaintenance.length}
-                valueColor={Colors.statusWarning}
-                backgroundColor={Colors.surfaceAmber}
-                icon="construct-outline"
-              />
-              <KPICard
-                label="DEAD"
-                value={deadVehicles.length}
-                valueColor={Colors.statusError}
-                backgroundColor={Colors.surfaceRed}
-                icon="close-circle-outline"
-              />
-              <KPICard
-                label="OPEN TICKETS"
-                value={ticketList.length}
-                valueColor={Colors.statusInfo}
-                backgroundColor={Colors.surfaceBlue}
-                icon="ticket-outline"
-              />
-            </View>
-
             {/* ── Under Maintenance ────────────────────────────────────────── */}
             {underMaintenance.length > 0 && (
               <View style={styles.section}>
@@ -195,15 +174,25 @@ export default function MaintenanceScreen() {
                   <View style={[styles.sectionDot, { backgroundColor: Colors.statusWarning }]} />
                   <Text style={styles.sectionTitle}>UNDER MAINTENANCE ({underMaintenance.length})</Text>
                 </View>
-                {underMaintenance.map(vehicle => (
-                  <VehicleMaintenanceCard
-                    key={vehicle.id as string}
-                    vehicle={vehicle as unknown as Vehicle}
-                    openTicket={ticketList.find(t => t.vehicle_id === vehicle.id)}
-                    onRepair={() => openRepairPartsModal(vehicle as unknown as Vehicle)}
-                    onStatusChange={handleStatusChange}
-                  />
-                ))}
+                {underMaintenance.map(vehicle => {
+                  const openTicket = ticketList.find(t => t.vehicle_id === vehicle.id);
+                  return (
+                    <VehicleMaintenanceCard
+                      key={vehicle.id as string}
+                      vehicle={vehicle as unknown as Vehicle}
+                      openTicket={openTicket}
+                      onRepair={() =>
+                        openRepairPartsModal(
+                          vehicle as unknown as Vehicle,
+                          undefined,
+                          openTicket?.id,
+                          openTicket?.description,
+                        )
+                      }
+                      onStatusChange={handleStatusChange}
+                    />
+                  );
+                })}
               </View>
             )}
 
@@ -214,15 +203,25 @@ export default function MaintenanceScreen() {
                   <View style={[styles.sectionDot, { backgroundColor: Colors.statusError }]} />
                   <Text style={styles.sectionTitle}>DEAD / WRITTEN OFF ({deadVehicles.length})</Text>
                 </View>
-                {deadVehicles.map(vehicle => (
-                  <VehicleMaintenanceCard
-                    key={vehicle.id as string}
-                    vehicle={vehicle as unknown as Vehicle}
-                    openTicket={ticketList.find(t => t.vehicle_id === vehicle.id)}
-                    onRepair={() => openRepairPartsModal(vehicle as unknown as Vehicle)}
-                    onStatusChange={handleStatusChange}
-                  />
-                ))}
+                {deadVehicles.map(vehicle => {
+                  const openTicket = ticketList.find(t => t.vehicle_id === vehicle.id);
+                  return (
+                    <VehicleMaintenanceCard
+                      key={vehicle.id as string}
+                      vehicle={vehicle as unknown as Vehicle}
+                      openTicket={openTicket}
+                      onRepair={() =>
+                        openRepairPartsModal(
+                          vehicle as unknown as Vehicle,
+                          undefined,
+                          openTicket?.id,
+                          openTicket?.description,
+                        )
+                      }
+                      onStatusChange={handleStatusChange}
+                    />
+                  );
+                })}
               </View>
             )}
 
@@ -274,6 +273,8 @@ export default function MaintenanceScreen() {
           vehicle={modal.vehicle}
           storeId={storeId ?? ''}
           damagedItemStates={modal.itemStates}
+          ticketId={modal.ticketId}
+          ticketDescription={modal.ticketDescription}
           onClose={() => setModal({ kind: 'none' })}
           onPartsSelected={(v, ticketId, parts) =>
             setModal({ kind: 'cost', vehicle: v, ticketId, parts })

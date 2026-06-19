@@ -19,21 +19,7 @@ export function isBookingAllowed(config: GlobalConfig | null | undefined): {
   allowed: boolean;
   blockedUntil?: string;
 } {
-  const cutoff = config?.booking_cutoff_hour;
-  if (cutoff === null || cutoff === undefined) return { allowed: true };
-
-  // Convert current UTC time to IST
-  const nowIST = new Date(new Date().toLocaleString('en-US', { timeZone: 'Asia/Kolkata' }));
-  const currentHour = nowIST.getHours();
-
-  if (currentHour < cutoff) {
-    const ampm = cutoff >= 12 ? 'PM' : 'AM';
-    const displayHour = cutoff > 12 ? cutoff - 12 : cutoff;
-    return {
-      allowed: false,
-      blockedUntil: `${displayHour}:00 ${ampm} IST`,
-    };
-  }
+  // Booking cutoff hour check is disabled per business rule updates
   return { allowed: true };
 }
 
@@ -162,6 +148,7 @@ export async function pauseBooking(
   vehicleId: string,
   batteryId: string,
   pauseReason: string,
+  hasIssues?: boolean,
 ): Promise<void> {
   // Step 1: Update booking to Paused
   const { error: bookingError } = await supabase
@@ -174,10 +161,11 @@ export async function pauseBooking(
     .eq('id', bookingId);
   if (bookingError) throw new Error(`Pause booking failed: ${bookingError.message}`);
 
-  // Step 2: Release vehicle back to Available (delink battery)
+  // Step 2: Release vehicle back to Available or Maintenance (delink battery)
+  const finalStatus = hasIssues ? 'Maintenance' : 'Available';
   const { error: vehicleError } = await supabase
     .from('vehicles')
-    .update({ status: 'Available', assigned_battery_id: null })
+    .update({ status: finalStatus, assigned_battery_id: null })
     .eq('id', vehicleId);
   if (vehicleError) throw new Error(`Release vehicle failed: ${vehicleError.message}`);
 
@@ -190,7 +178,12 @@ export async function pauseBooking(
 }
 
 // ── Complete / Return booking (direct update) ────────────────────────────────
-export async function completeBooking(bookingId: string, vehicleId: string, batteryId: string): Promise<void> {
+export async function completeBooking(
+  bookingId: string,
+  vehicleId: string,
+  batteryId: string,
+  hasIssues?: boolean,
+): Promise<void> {
   const { error: bookingError } = await supabase
     .from('bookings')
     .update({
@@ -200,10 +193,11 @@ export async function completeBooking(bookingId: string, vehicleId: string, batt
     .eq('id', bookingId);
   if (bookingError) throw new Error(`Complete booking failed: ${bookingError.message}`);
 
-  // Release vehicle
+  // Release vehicle to Available or Maintenance
+  const finalStatus = hasIssues ? 'Maintenance' : 'Available';
   const { error: vehicleError } = await supabase
     .from('vehicles')
-    .update({ status: 'Available', assigned_battery_id: null })
+    .update({ status: finalStatus, assigned_battery_id: null })
     .eq('id', vehicleId);
   if (vehicleError) throw new Error(`Release vehicle failed: ${vehicleError.message}`);
 
@@ -265,7 +259,7 @@ export async function createCustomer(
 ): Promise<string> {
   const { data, error } = await supabase
     .from('customers')
-    .insert(customer)
+    .insert({ ...customer, kyc_status: true })
     .select('id')
     .single();
   if (error) throw new Error(`Create rider failed: ${error.message}`);

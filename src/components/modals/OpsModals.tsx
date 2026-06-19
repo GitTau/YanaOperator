@@ -33,9 +33,10 @@ interface PauseModalProps {
   booking: BookingWithDetails | null;
   onClose: () => void;
   onSuccess: () => void;
+  hasIssues?: boolean;
 }
 
-export function PauseModal({ visible, booking, onClose, onSuccess }: PauseModalProps) {
+export function PauseModal({ visible, booking, onClose, onSuccess, hasIssues = false }: PauseModalProps) {
   const [reason, setReason] = useState('');
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
@@ -46,7 +47,7 @@ export function PauseModal({ visible, booking, onClose, onSuccess }: PauseModalP
     setLoading(true);
     setError(null);
     try {
-      await pauseBooking(booking.id, booking.vehicle_id, booking.battery_id, reason.trim());
+      await pauseBooking(booking.id, booking.vehicle_id, booking.battery_id, reason.trim(), hasIssues);
       handleClose();
       onSuccess();
     } catch (err) {
@@ -114,9 +115,10 @@ interface ReturnModalProps {
   onSuccess: () => void;
   /** Damage fines from the vehicle checklist. Deducted from security deposit. */
   damageFines?: number;
+  hasIssues?: boolean;
 }
 
-export function ReturnModal({ visible, booking, onClose, onSuccess, damageFines = 0 }: ReturnModalProps) {
+export function ReturnModal({ visible, booking, onClose, onSuccess, damageFines = 0, hasIssues = false }: ReturnModalProps) {
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
 
@@ -125,7 +127,7 @@ export function ReturnModal({ visible, booking, onClose, onSuccess, damageFines 
     setLoading(true);
     setError(null);
     try {
-      await completeBooking(booking.id, booking.vehicle_id, booking.battery_id);
+      await completeBooking(booking.id, booking.vehicle_id, booking.battery_id, hasIssues);
       handleClose();
       onSuccess();
     } catch (err) {

@@ -14,6 +14,7 @@ import { Ionicons } from '@expo/vector-icons';
 import React, { useState } from 'react';
 import {
   ActivityIndicator,
+  Alert,
   LayoutAnimation,
   Modal,
   Platform,
@@ -28,7 +29,12 @@ import { Colors, Radius, Spacing, Typography } from '../../constants/design';
 import type { BookingWithDetails } from '../../lib/database.types';
 import { useChecklistTemplate } from '../../hooks/useQueries';
 import type { ChecklistTemplateItem } from '../../hooks/useQueries';
-import { formatCurrency } from '../../services/bookingService';
+import {
+  formatCurrency,
+  openMaintenanceTicket,
+  saveVehicleChecklist,
+} from '../../services/bookingService';
+import { useAuthStore } from '../../stores/authStore';
 
 // ── Types ─────────────────────────────────────────────────────────────────────
 
@@ -77,6 +83,7 @@ export function ChecklistModal({
   const [states, setStates]     = useState<Record<string, ItemState>>({});
   const [notes, setNotes]       = useState<Record<string, string>>({});
   const [showRaiseTicket, setShowRaiseTicket] = useState(false);
+  const [submitting, setSubmitting]           = useState(false);
 
   // ── Derived values ────────────────────────────────────────────────────────
 
@@ -114,10 +121,53 @@ export function ChecklistModal({
     }
   };
 
-  const handleTicketDecision = () => {
-    setShowRaiseTicket(false);
-    onComplete(hasIssues, totalDamageFines);
-    handleClose();
+  const handleRaiseTicket = async () => {
+    if (submitting || !booking) return;
+    setSubmitting(true);
+    try {
+      const itemStatesStrings: Record<string, string> = {};
+      for (const [k, v] of Object.entries(states)) {
+        if (v) itemStatesStrings[k] = v;
+      }
+
+      // 1. Save Checklist
+      const { profile } = useAuthStore.getState();
+      await saveVehicleChecklist({
+        vehicleId:   booking.vehicle_id,
+        storeId:     booking.store_id,
+        bookingId:   booking.id,
+        flow:        checklistType,
+        itemStates:  itemStatesStrings,
+        itemNotes:   notes,
+        submittedBy: profile?.id ?? null,
+      });
+
+      // 2. Format description of damages
+      const affectedItems = Object.entries(states)
+        .filter(([, s]) => s === 'issue' || s === 'damaged')
+        .map(([key, state]) => {
+          const label = items?.find(i => i.item_key === key)?.label || key;
+          const note = notes[key] ? `: ${notes[key]}` : '';
+          const stateStr = state ? state.toUpperCase() : 'ISSUE';
+          return `${label} (${stateStr})${note}`;
+        });
+      const description = `Flagged during ${checklistType}: ${affectedItems.join(', ')}`;
+
+      // 3. Open Maintenance Ticket
+      await openMaintenanceTicket({
+        vehicleId: booking.vehicle_id,
+        storeId:   booking.store_id,
+        description,
+      });
+
+      setShowRaiseTicket(false);
+      onComplete(hasIssues, totalDamageFines);
+      handleClose();
+    } catch (err) {
+      Alert.alert('Error', err instanceof Error ? err.message : 'Failed to raise maintenance ticket');
+    } finally {
+      setSubmitting(false);
+    }
   };
 
   const handleClose = () => {
@@ -191,19 +241,27 @@ export function ChecklistModal({
             <View style={styles.ticketActions}>
               <Pressable
                 style={[styles.ticketBtn, styles.ticketBtnGhost]}
-                onPress={handleTicketDecision}
+                onPress={() => setShowRaiseTicket(false)}
+                disabled={submitting}
               >
-                <Text style={[styles.ticketBtnText, { color: Colors.textSecondary }]}>Skip — Proceed Anyway</Text>
+                <Text style={[styles.ticketBtnText, { color: Colors.textSecondary }]}>Go Back & Edit Checklist</Text>
               </Pressable>
               <Pressable
                 style={[
                   styles.ticketBtn,
                   { backgroundColor: hasDamage ? Colors.statusError : Colors.statusWarning },
                 ]}
-                onPress={handleTicketDecision}
+                onPress={handleRaiseTicket}
+                disabled={submitting}
               >
-                <Ionicons name="construct-outline" size={15} color="#fff" style={{ marginRight: 6 }} />
-                <Text style={[styles.ticketBtnText, { color: '#fff' }]}>Yes — Raise Ticket</Text>
+                {submitting ? (
+                  <ActivityIndicator size="small" color="#fff" />
+                ) : (
+                  <>
+                    <Ionicons name="construct-outline" size={15} color="#fff" style={{ marginRight: 6 }} />
+                    <Text style={[styles.ticketBtnText, { color: '#fff' }]}>Yes — Raise Ticket</Text>
+                  </>
+                )}
               </Pressable>
             </View>
           </View>

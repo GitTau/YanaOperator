@@ -22,9 +22,9 @@ import {
   calculatePricing,
   createBooking,
   formatCurrency,
-  isBookingAllowed,
 } from '../../services/bookingService';
 import { YanaButton } from '../ui';
+import { CalendarModal } from './CalendarModal';
 
 interface DropdownSelectorProps<T> {
   label: string;
@@ -189,17 +189,18 @@ export function BookRideModal({
   const [selectedBattery, setSelectedBattery] = useState<Battery | null>(null);
   const [plan, setPlan] = useState<'Weekly' | 'Monthly'>('Weekly');
   const [openDropdown, setOpenDropdown] = useState<'customer' | 'vehicle' | 'battery' | null>(null);
-  const [startDate, setStartDate] = useState(formatDate(new Date()));
-  const [dateMode, setDateMode] = useState<'Today' | 'Tomorrow' | 'Custom'>('Today');
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
+
+  const [startDate, setStartDate] = useState(() => formatDate(new Date()));
+  const [showCalendar, setShowCalendar] = useState(false);
 
   const toggleDropdown = (type: 'customer' | 'vehicle' | 'battery') => {
     setOpenDropdown(prev => prev === type ? null : type);
   };
 
   const endDate = useMemo(() => {
-    const days = plan === 'Weekly' ? 7 : 30;
+    const days = plan === 'Weekly' ? 6 : 29;
     return addDays(startDate, days);
   }, [startDate, plan]);
 
@@ -215,20 +216,10 @@ export function BookRideModal({
     return calculatePricing(plan, globalConfig);
   }, [plan, globalConfig]);
 
-  const cutoffCheck = isBookingAllowed(globalConfig);
-
-  const isValidDate = (dStr: string) => {
-    if (dStr.length !== 10) return false;
-    const d = new Date(dStr);
-    return !isNaN(d.getTime());
-  };
-
   const canSubmit =
     !!selectedCustomer &&
     !!selectedVehicle &&
-    !!selectedBattery &&
-    isValidDate(startDate) &&
-    cutoffCheck.allowed;
+    !!selectedBattery;
 
   const handleSubmit = async () => {
     if (!canSubmit || !pricing) return;
@@ -263,7 +254,7 @@ export function BookRideModal({
     setSelectedBattery(null);
     setPlan('Weekly');
     setStartDate(formatDate(new Date()));
-    setDateMode('Today');
+    setShowCalendar(false);
     setOpenDropdown(null);
     setError(null);
     onClose();
@@ -283,15 +274,6 @@ export function BookRideModal({
               <Text style={styles.closeBtn}>✕</Text>
             </Pressable>
           </View>
-
-          {/* Cutoff warning */}
-          {!cutoffCheck.allowed && (
-            <View style={styles.cutoffBanner}>
-              <Text style={styles.cutoffText}>
-                🕐 New bookings open at {cutoffCheck.blockedUntil}. Come back then!
-              </Text>
-            </View>
-          )}
 
           {/* SELECT RIDER DROPDOWN */}
           <DropdownSelector
@@ -402,64 +384,18 @@ export function BookRideModal({
 
           {/* RENTAL PERIOD */}
           <Text style={[Typography.labelCaps, styles.fieldLabel]}>RENTAL PERIOD</Text>
-          <View style={styles.dateSelectorRow}>
-            {/* Start Date Selection */}
-            <View style={styles.dateSelectorCol}>
-              <Text style={styles.dateSubLabel}>START DATE</Text>
-              <View style={styles.dateTabRow}>
-                {(['Today', 'Tomorrow', 'Custom'] as const).map((mode) => (
-                  <Pressable
-                    key={mode}
-                    style={[
-                      styles.dateTabBtn,
-                      dateMode === mode && styles.dateTabBtnActive,
-                    ]}
-                    onPress={() => {
-                      setDateMode(mode);
-                      if (mode === 'Today') {
-                        setStartDate(formatDate(new Date()));
-                      } else if (mode === 'Tomorrow') {
-                        const tomorrow = new Date();
-                        tomorrow.setDate(tomorrow.getDate() + 1);
-                        setStartDate(formatDate(tomorrow));
-                      }
-                    }}
-                  >
-                    <Text
-                      style={[
-                        styles.dateTabBtnText,
-                        dateMode === mode && styles.dateTabBtnTextActive,
-                      ]}
-                    >
-                      {mode}
-                    </Text>
-                  </Pressable>
-                ))}
+          <View style={styles.rentalPeriodCard}>
+            <Pressable style={styles.periodColPressable} onPress={() => setShowCalendar(true)}>
+              <Text style={styles.periodLabel}>START DATE</Text>
+              <View style={styles.dateValueContainer}>
+                <Text style={styles.periodValue}>{getDisplayDate(startDate)}</Text>
+                <Ionicons name="calendar-outline" size={14} color={Colors.brandTeal} style={styles.calendarIcon} />
               </View>
-              {dateMode === 'Custom' && (
-                <TextInput
-                  style={styles.customDateInput}
-                  value={startDate}
-                  onChangeText={setStartDate}
-                  placeholder="YYYY-MM-DD"
-                  placeholderTextColor={Colors.textMuted}
-                  maxLength={10}
-                />
-              )}
-            </View>
-
-            {/* Calculated End Date (Locked) */}
-            <View style={styles.dateResultCol}>
-              <Text style={styles.dateSubLabel}>END DATE (AUTO)</Text>
-              <View style={styles.dateResultBox}>
-                <Ionicons name="calendar-outline" size={16} color={Colors.textSecondary} style={{ marginRight: 6 }} />
-                <Text style={styles.dateResultText}>
-                  {getDisplayDate(endDate)}
-                </Text>
-              </View>
-              <Text style={styles.dateResultHint}>
-                {plan === 'Weekly' ? '+7 Days weekly plan' : '+30 Days monthly plan'}
-              </Text>
+            </Pressable>
+            <Ionicons name="arrow-forward" size={18} color={Colors.textMuted} style={styles.periodArrow} />
+            <View style={styles.periodCol}>
+              <Text style={styles.periodLabel}>END DATE (AUTO)</Text>
+              <Text style={styles.periodValue}>{getDisplayDate(endDate)}</Text>
             </View>
           </View>
 
@@ -501,6 +437,12 @@ export function BookRideModal({
             style={styles.submitBtn}
           />
         </View>
+        <CalendarModal
+          visible={showCalendar}
+          onClose={() => setShowCalendar(false)}
+          selectedDate={startDate}
+          onSelectDate={setStartDate}
+        />
       </View>
     </Modal>
   );
@@ -681,97 +623,46 @@ const styles = StyleSheet.create({
   cancelBtn: { flex: 1 },
   submitBtn: { flex: 2 },
 
-  dateSelectorRow: {
+  rentalPeriodCard: {
     flexDirection: 'row',
-    gap: Spacing.sm,
+    alignItems: 'center',
+    justifyContent: 'space-between',
     backgroundColor: Colors.surfaceCard,
     borderRadius: Radius.card,
-    padding: Spacing.md,
     borderWidth: 1,
     borderColor: Colors.borderLight,
+    padding: Spacing.md,
     marginBottom: Spacing.md,
   },
-  dateSelectorCol: {
-    flex: 1.2,
+  periodCol: {
+    flex: 1,
+    alignItems: 'center',
   },
-  dateSubLabel: {
-    ...Typography.labelCaps,
-    color: Colors.textSecondary,
-    fontSize: 9,
-    marginBottom: 6,
+  periodColPressable: {
+    flex: 1,
+    alignItems: 'center',
+    paddingVertical: 4,
   },
-  dateTabRow: {
+  dateValueContainer: {
     flexDirection: 'row',
-    backgroundColor: Colors.bgApp,
-    borderRadius: Radius.sm,
-    padding: 3,
+    alignItems: 'center',
     gap: 4,
-    height: 40,
-    alignItems: 'center',
   },
-  dateTabBtn: {
-    flex: 1,
-    height: '100%',
-    alignItems: 'center',
-    justifyContent: 'center',
-    borderRadius: Radius.xs,
+  calendarIcon: {
+    marginLeft: 2,
   },
-  dateTabBtnActive: {
-    backgroundColor: Colors.surfaceCard,
-    shadowColor: '#000',
-    shadowOffset: { width: 0, height: 1 },
-    shadowOpacity: 0.08,
-    shadowRadius: 2,
-    elevation: 1,
-  },
-  dateTabBtnText: {
-    fontSize: 10,
-    fontWeight: '600',
-    color: Colors.textSecondary,
-  },
-  dateTabBtnTextActive: {
-    color: Colors.brandTeal,
-    fontWeight: '700',
-  },
-  customDateInput: {
-    height: 40,
-    backgroundColor: Colors.bgApp,
-    borderRadius: Radius.sm,
-    borderWidth: 1,
-    borderColor: Colors.borderLight,
-    paddingHorizontal: 10,
-    marginTop: Spacing.sm,
-    ...Typography.bodySecondary,
-    color: Colors.textPrimary,
-    textAlign: 'center',
-    fontWeight: '600',
-  },
-  dateResultCol: {
-    flex: 1,
-    borderLeftWidth: 1,
-    borderLeftColor: Colors.borderLight,
-    paddingLeft: Spacing.md,
-  },
-  dateResultBox: {
-    height: 40,
-    flexDirection: 'row',
-    alignItems: 'center',
-    backgroundColor: Colors.bgApp,
-    borderRadius: Radius.sm,
-    paddingHorizontal: 10,
-    borderWidth: 1,
-    borderColor: Colors.borderLight,
-  },
-  dateResultText: {
-    ...Typography.bodySecondary,
-    fontWeight: '700',
-    color: Colors.textPrimary,
-  },
-  dateResultHint: {
+  periodLabel: {
     ...Typography.caption,
     color: Colors.textMuted,
-    marginTop: 4,
-    fontSize: 10,
-    fontStyle: 'italic',
+    fontWeight: '700',
+    marginBottom: 4,
+  },
+  periodValue: {
+    ...Typography.bodyPrimary,
+    fontWeight: '800',
+    color: Colors.textPrimary,
+  },
+  periodArrow: {
+    marginHorizontal: Spacing.sm,
   },
 });

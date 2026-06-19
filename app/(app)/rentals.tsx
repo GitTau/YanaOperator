@@ -126,6 +126,7 @@ export default function RentalsScreen() {
   const [showChecklist, setShowChecklist]       = useState(false);
   // Damage fines from checklist — forwarded to ReturnModal for deposit calc
   const [checklistFines, setChecklistFines]     = useState(0);
+  const [checklistHasIssues, setChecklistHasIssues] = useState(false);
 
   const { data: bookings, isLoading, error, refetch } = useBookings(storeId);
   const { data: customers }   = useCustomers(storeId);
@@ -211,6 +212,7 @@ export default function RentalsScreen() {
   const handleChecklistComplete = (hasIssues: boolean, totalDamageFines: number) => {
     setShowChecklist(false);
     setChecklistFines(totalDamageFines);
+    setChecklistHasIssues(hasIssues);
     if (checklistType === 'pause') {
       setPauseTarget(checklistBooking);
     } else {
@@ -447,15 +449,17 @@ export default function RentalsScreen() {
       <PauseModal
         visible={!!pauseTarget}
         booking={pauseTarget}
-        onClose={() => setPauseTarget(null)}
+        onClose={() => { setPauseTarget(null); setChecklistHasIssues(false); }}
         onSuccess={invalidate}
+        hasIssues={checklistHasIssues}
       />
       <ReturnModal
         visible={!!returnTarget}
         booking={returnTarget}
         damageFines={checklistFines}
-        onClose={() => { setReturnTarget(null); setChecklistFines(0); }}
+        onClose={() => { setReturnTarget(null); setChecklistFines(0); setChecklistHasIssues(false); }}
         onSuccess={invalidate}
+        hasIssues={checklistHasIssues}
       />
       <SwapModal
         visible={!!swapTarget}

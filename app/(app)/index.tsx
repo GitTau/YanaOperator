@@ -90,7 +90,6 @@ export default function OverviewScreen() {
               Ops Center
             </Text>
           </View>
-          <StoreLiveBadge />
         </View>
 
         {bookingsError && (
