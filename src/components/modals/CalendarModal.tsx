@@ -1,6 +1,6 @@
 import { Ionicons } from '@expo/vector-icons';
 import React, { useState } from 'react';
-import { Modal, Pressable, StyleSheet, Text, View } from 'react-native';
+import { Pressable, StyleSheet, Text, View } from 'react-native';
 import { Colors, Radius, Spacing, Typography } from '../../constants/design';
 
 interface CalendarModalProps {
@@ -63,100 +63,105 @@ export function CalendarModal({ visible, onClose, selectedDate, onSelectDate }: 
     onClose();
   };
 
+  if (!visible) return null;
+
   return (
-    <Modal visible={visible} transparent={true} animationType="fade" onRequestClose={onClose}>
-      <View style={styles.backdrop}>
-        <View style={styles.modalContainer}>
-          {/* Header */}
-          <View style={styles.header}>
-            <Text style={styles.title}>Select Start Date</Text>
-            <Pressable onPress={onClose} hitSlop={12} style={styles.closeButton}>
-              <Ionicons name="close" size={20} color={Colors.textSecondary} />
-            </Pressable>
-          </View>
+    <View style={styles.backdrop}>
+      <View style={styles.modalContainer}>
+        {/* Header */}
+        <View style={styles.header}>
+          <Text style={styles.title}>Select Start Date</Text>
+          <Pressable onPress={onClose} hitSlop={12} style={styles.closeButton}>
+            <Ionicons name="close" size={20} color={Colors.textSecondary} />
+          </Pressable>
+        </View>
 
-          {/* Month selector */}
-          <View style={styles.monthSelector}>
-            <Pressable onPress={handlePrevMonth} hitSlop={8} style={styles.navBtn}>
-              <Ionicons name="chevron-back" size={20} color={Colors.textPrimary} />
-            </Pressable>
-            <Text style={styles.monthLabel}>{monthNames[month]} {year}</Text>
-            <Pressable onPress={handleNextMonth} hitSlop={8} style={styles.navBtn}>
-              <Ionicons name="chevron-forward" size={20} color={Colors.textPrimary} />
-            </Pressable>
-          </View>
+        {/* Month selector */}
+        <View style={styles.monthSelector}>
+          <Pressable onPress={handlePrevMonth} hitSlop={8} style={styles.navBtn}>
+            <Ionicons name="chevron-back" size={20} color={Colors.textPrimary} />
+          </Pressable>
+          <Text style={styles.monthLabel}>{monthNames[month]} {year}</Text>
+          <Pressable onPress={handleNextMonth} hitSlop={8} style={styles.navBtn}>
+            <Ionicons name="chevron-forward" size={20} color={Colors.textPrimary} />
+          </Pressable>
+        </View>
 
-          {/* Weekday labels */}
-          <View style={styles.weekdayRow}>
-            {weekdayNames.map((day, idx) => (
-              <Text key={idx} style={styles.weekdayLabel}>{day}</Text>
-            ))}
-          </View>
+        {/* Weekday labels */}
+        <View style={styles.weekdayRow}>
+          {weekdayNames.map((day, idx) => (
+            <Text key={idx} style={styles.weekdayLabel}>{day}</Text>
+          ))}
+        </View>
 
-          {/* Days Grid */}
-          <View style={styles.grid}>
-            {cells.map((cell, idx) => {
-              if (cell.dayNum === null || cell.dateString === null) {
-                return <View key={`empty-${idx}`} style={styles.gridCell} />;
-              }
+        {/* Days Grid */}
+        <View style={styles.grid}>
+          {cells.map((cell, idx) => {
+            if (cell.dayNum === null || cell.dateString === null) {
+              return <View key={`empty-${idx}`} style={styles.gridCell} />;
+            }
 
-              const isSelected = cell.dateString === selectedDate;
-              const isToday = cell.dateString === todayStr;
+            const isSelected = cell.dateString === selectedDate;
+            const isToday = cell.dateString === todayStr;
 
-              return (
-                <Pressable
-                  key={cell.dateString}
-                  style={styles.gridCell}
-                  onPress={() => handleSelectDay(cell.dateString!)}
+            return (
+              <Pressable
+                key={cell.dateString}
+                style={styles.gridCell}
+                onPress={() => handleSelectDay(cell.dateString!)}
+              >
+                <View
+                  style={[
+                    styles.dayCircle,
+                    isSelected && styles.dayCircleSelected,
+                    isToday && !isSelected && styles.dayCircleToday,
+                  ]}
                 >
-                  <View
+                  <Text
                     style={[
-                      styles.dayCircle,
-                      isSelected && styles.dayCircleSelected,
-                      isToday && !isSelected && styles.dayCircleToday,
+                      styles.dayText,
+                      isSelected && styles.dayTextSelected,
+                      isToday && !isSelected && styles.dayTextToday,
                     ]}
                   >
-                    <Text
-                      style={[
-                        styles.dayText,
-                        isSelected && styles.dayTextSelected,
-                        isToday && !isSelected && styles.dayTextToday,
-                      ]}
-                    >
-                      {cell.dayNum}
-                    </Text>
-                  </View>
-                </Pressable>
-              );
-            })}
-          </View>
+                    {cell.dayNum}
+                  </Text>
+                </View>
+              </Pressable>
+            );
+          })}
+        </View>
 
-          {/* Footer Actions */}
-          <View style={styles.footer}>
-            <Pressable
-              style={styles.todayBtn}
-              onPress={() => {
-                onSelectDate(todayStr);
-                setCurrentMonth(new Date());
-                onClose();
-              }}
-            >
-              <Text style={styles.todayBtnText}>Reset to Today</Text>
-            </Pressable>
-          </View>
+        {/* Footer Actions */}
+        <View style={styles.footer}>
+          <Pressable
+            style={styles.todayBtn}
+            onPress={() => {
+              onSelectDate(todayStr);
+              setCurrentMonth(new Date());
+              onClose();
+            }}
+          >
+            <Text style={styles.todayBtnText}>Reset to Today</Text>
+          </Pressable>
         </View>
       </View>
-    </Modal>
+    </View>
   );
 }
 
 const styles = StyleSheet.create({
   backdrop: {
-    flex: 1,
+    position: 'absolute',
+    top: 0,
+    left: 0,
+    right: 0,
+    bottom: 0,
     backgroundColor: 'rgba(15, 28, 46, 0.65)',
     justifyContent: 'center',
     alignItems: 'center',
     padding: Spacing.md,
+    zIndex: 9999,
   },
   modalContainer: {
     width: '100%',
