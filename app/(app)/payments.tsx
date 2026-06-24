@@ -29,13 +29,38 @@ export default function PaymentsScreen() {
   const paymentQueue = useMemo(() => {
     if (!bookings) return [];
     const today = new Date();
+    today.setHours(0, 0, 0, 0);
     return (bookings as BookingWithDetails[])
       .filter((b) => ['Draft', 'Active', 'Paused'].includes(b.status))
       .map((b) => {
-        const gate    = calculatePaymentGate(b.rental_plan, b.total_amount, b.deposit_amount, b.fines_amount, b.amount_paid);
-        const balance = b.total_amount + b.deposit_amount + b.fines_amount - b.amount_paid;
+        const gate = calculatePaymentGate(
+          b.rental_plan,
+          b.total_amount,
+          b.deposit_amount,
+          b.fines_amount,
+          b.amount_paid,
+          b.customer.start_date,
+          b.customer.end_date,
+        );
+        const totalFines = b.fines_amount + gate.overdueFine;
+        const balance = b.total_amount + b.deposit_amount + totalFines - b.amount_paid;
+
         const endDate = b.customer.end_date ? new Date(b.customer.end_date) : null;
-        const daysLate = endDate && endDate < today ? Math.floor((today.getTime() - endDate.getTime()) / 86400000) : 0;
+        if (endDate) endDate.setHours(0, 0, 0, 0);
+        let daysLate = endDate && endDate < today ? Math.floor((today.getTime() - endDate.getTime()) / 86400000) : 0;
+
+        if (b.rental_plan === 'Monthly' && daysLate === 0 && gate.isSecondPartOverdue) {
+          const startDate = b.customer.start_date ? new Date(b.customer.start_date) : null;
+          if (startDate) {
+            startDate.setHours(0, 0, 0, 0);
+            const secondPartDueDate = new Date(startDate);
+            secondPartDueDate.setDate(startDate.getDate() + 9);
+            if (today > secondPartDueDate) {
+              daysLate = Math.floor((today.getTime() - secondPartDueDate.getTime()) / 86400000);
+            }
+          }
+        }
+
         return { booking: b, gate, balance, daysLate };
       })
       .sort((a, b) => {

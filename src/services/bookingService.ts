@@ -23,10 +23,76 @@ export function isBookingAllowed(config: GlobalConfig | null | undefined): {
   return { allowed: true };
 }
 
+// ── Overdue Fines Calculation ───────────────────────────────────────────────
+// Standard: Grace period 1 day. Fines accumulate starting day 2 (₹300/day).
+// Monthly 2nd part: due date T+9 days. Grace period T+10 and T+11.
+// Fines accumulate starting day 12 (T+11 or later, days late >= 2) (₹300/day).
+export function calculateOverdueFines(
+  rentalPlan: 'Weekly' | 'Monthly',
+  startDateStr: string | null | undefined,
+  endDateStr: string | null | undefined,
+  totalAmount: number,
+  depositAmount: number,
+  amountPaid: number,
+): {
+  overdueFine: number;
+  isSecondPartOverdue: boolean;
+  secondPartDueDateStr: string | null;
+} {
+  if (!startDateStr || !endDateStr) {
+    return { overdueFine: 0, isSecondPartOverdue: false, secondPartDueDateStr: null };
+  }
+
+  const startDate = new Date(startDateStr);
+  startDate.setHours(0, 0, 0, 0);
+
+  const endDate = new Date(endDateStr);
+  endDate.setHours(0, 0, 0, 0);
+
+  const today = new Date();
+  today.setHours(0, 0, 0, 0);
+
+  let overdueFine = 0;
+  let isSecondPartOverdue = false;
+  let secondPartDueDateStr: string | null = null;
+
+  // 1. Calculate standard end-date overdue fine
+  if (today > endDate) {
+    const diffTime = today.getTime() - endDate.getTime();
+    const daysLate = Math.floor(diffTime / (1000 * 60 * 60 * 24));
+    if (daysLate >= 2) {
+      overdueFine = daysLate * 300;
+    }
+  }
+
+  // 2. Calculate monthly 2nd part overdue fine
+  if (rentalPlan === 'Monthly') {
+    const secondPartDueDate = new Date(startDate);
+    secondPartDueDate.setDate(startDate.getDate() + 9);
+    secondPartDueDateStr = secondPartDueDate.toISOString().split('T')[0];
+
+    if (today > secondPartDueDate) {
+      isSecondPartOverdue = true;
+      // Only charge 2nd part fine if they haven't paid the base rent + deposit
+      if (amountPaid < totalAmount + depositAmount) {
+        const diffTime = today.getTime() - secondPartDueDate.getTime();
+        const daysLate2ndPart = Math.floor(diffTime / (1000 * 60 * 60 * 24));
+        if (daysLate2ndPart >= 2) {
+          const secondPartFine = daysLate2ndPart * 300;
+          overdueFine = Math.max(overdueFine, secondPartFine);
+        }
+      }
+    }
+  }
+
+  return { overdueFine, isSecondPartOverdue, secondPartDueDateStr };
+}
+
 // ── Revenue protection gate calculation ──────────────────────────────────────
 // Weekly:  must pay 100% of (total + deposit + fines) before dispatch
 // Monthly: must pay minimum ₹4,000 before dispatch (hard floor, not a %)
 //          If total owed < ₹4,000, full amount is required.
+//          If past the 2nd part due date (T+9 days), gate is 100% of total owed.
 export const MONTHLY_GATE_FLOOR = 4000; // ₹ — update here if rate changes
 
 export function calculatePaymentGate(
@@ -35,24 +101,52 @@ export function calculatePaymentGate(
   depositAmount: number,
   finesAmount: number,
   amountPaid: number,
+  startDateStr?: string | null,
+  endDateStr?: string | null,
 ): {
   gatePct: number | null;  // null for Monthly (fixed floor, not a %)
   gateAmount: number;
   paidPct: number;
   isCleared: boolean;
+  overdueFine: number;
+  isSecondPartOverdue: boolean;
+  secondPartDueDateStr: string | null;
 } {
-  const totalOwed = totalAmount + depositAmount + finesAmount;
-  const gateAmount =
-    rentalPlan === 'Weekly'
-      ? totalOwed                                        // 100%
-      : Math.min(MONTHLY_GATE_FLOOR, totalOwed);        // ₹4,000 floor
-  const gatePct = rentalPlan === 'Weekly' ? 1.0 : null;
+  const { overdueFine, isSecondPartOverdue, secondPartDueDateStr } = calculateOverdueFines(
+    rentalPlan,
+    startDateStr,
+    endDateStr,
+    totalAmount,
+    depositAmount,
+    amountPaid,
+  );
+
+  const totalFines = finesAmount + overdueFine;
+  const totalOwed = totalAmount + depositAmount + totalFines;
+
+  let gateAmount = 0;
+  if (rentalPlan === 'Weekly') {
+    gateAmount = totalOwed; // 100%
+  } else {
+    // For Monthly: 100% if 2nd part is overdue (today > T+9), otherwise ₹4,000 floor
+    if (isSecondPartOverdue) {
+      gateAmount = totalOwed;
+    } else {
+      gateAmount = Math.min(MONTHLY_GATE_FLOOR, totalOwed);
+    }
+  }
+
+  const gatePct = rentalPlan === 'Weekly' ? 1.0 : (isSecondPartOverdue ? 1.0 : null);
   const paidPct = totalOwed > 0 ? amountPaid / totalOwed : 1;
+
   return {
     gatePct,
     gateAmount,
     paidPct,
     isCleared: amountPaid >= gateAmount,
+    overdueFine,
+    isSecondPartOverdue,
+    secondPartDueDateStr,
   };
 }
 

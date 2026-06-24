@@ -15,6 +15,7 @@ import {
 import { Colors, Radius, Spacing, Typography } from '../../constants/design';
 import type { Battery, BookingWithDetails, Vehicle } from '../../lib/database.types';
 import {
+  calculateOverdueFines,
   completeBooking,
   createCustomer,
   formatCurrency,
@@ -140,7 +141,16 @@ export function ReturnModal({ visible, booking, onClose, onSuccess, damageFines 
   const handleClose = () => { setError(null); onClose(); };
   if (!booking) return null;
 
-  const balanceDue        = booking.total_amount + booking.deposit_amount + booking.fines_amount - booking.amount_paid;
+  const { overdueFine } = calculateOverdueFines(
+    booking.rental_plan,
+    booking.customer.start_date,
+    booking.customer.end_date,
+    booking.total_amount,
+    booking.deposit_amount,
+    booking.amount_paid,
+  );
+  const totalFines = booking.fines_amount + overdueFine;
+  const balanceDue        = booking.total_amount + booking.deposit_amount + totalFines - booking.amount_paid;
   const depositReturnable = Math.max(0, booking.deposit_amount - damageFines);
 
   return (
@@ -162,8 +172,8 @@ export function ReturnModal({ visible, booking, onClose, onSuccess, damageFines 
           <View style={{ gap: 8, marginVertical: Spacing.md }}>
             <SummaryLine label="Total Rent"        value={formatCurrency(booking.total_amount)} />
             <SummaryLine label="Security Deposit"  value={formatCurrency(booking.deposit_amount)} />
-            {booking.fines_amount > 0 && (
-              <SummaryLine label="Fines" value={formatCurrency(booking.fines_amount)} valueColor={Colors.statusOverdue} />
+            {totalFines > 0 && (
+              <SummaryLine label="Fines" value={formatCurrency(totalFines)} valueColor={Colors.statusOverdue} />
             )}
             <SummaryLine label="Amount Paid"       value={formatCurrency(booking.amount_paid)} valueColor={Colors.statusActive} />
             <Divider />

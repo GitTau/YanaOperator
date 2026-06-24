@@ -28,11 +28,13 @@ export function RentalCard({ booking, onDispatch, onCollectCash, onPause, onResu
   const gate = calculatePaymentGate(
     booking.rental_plan, booking.total_amount,
     booking.deposit_amount, booking.fines_amount, booking.amount_paid,
+    booking.customer.start_date, booking.customer.end_date,
   );
 
   const paidPct       = Math.min(gate.paidPct, 1);
   const paidPctLabel  = `${Math.round(gate.paidPct * 100)}%`;
   const barColor      = gate.isCleared ? Colors.statusActive : paidPct >= 0.5 ? Colors.statusWarning : Colors.statusError;
+  const totalFines    = booking.fines_amount + gate.overdueFine;
 
   const returnDue = booking.customer.end_date
     ? new Date(booking.customer.end_date).toLocaleDateString('en-IN', { day: 'numeric', month: 'short' })
@@ -41,14 +43,19 @@ export function RentalCard({ booking, onDispatch, onCollectCash, onPause, onResu
   const initials = booking.customer.name.slice(0, 2).toUpperCase();
 
   const isOverdue = (() => {
-    if (booking.status !== 'Active') return false;
     const end = booking.customer.end_date ? new Date(booking.customer.end_date) : null;
-    return end ? end < new Date() : false;
+    if (!end) return false;
+    end.setHours(0, 0, 0, 0);
+    const today = new Date();
+    today.setHours(0, 0, 0, 0);
+    return end < today;
   })();
 
+  const isOverdueAndUnpaid = (isOverdue || gate.isSecondPartOverdue) && !gate.isCleared;
+
   const isDraft  = booking.status === 'Draft';
-  const isActive = booking.status === 'Active';
-  const isPaused = booking.status === 'Paused';
+  const isActive = booking.status === 'Active' && !isOverdueAndUnpaid;
+  const isPaused = booking.status === 'Paused' || (booking.status === 'Active' && isOverdueAndUnpaid);
   const isClosed = booking.status === 'Completed' || booking.status === 'Cancelled';
 
   return (
@@ -74,7 +81,7 @@ export function RentalCard({ booking, onDispatch, onCollectCash, onPause, onResu
 
         {/* Status badges */}
         <View style={styles.headerRight}>
-          <StatusBadge status={booking.status} />
+          <StatusBadge status={isPaused ? 'Paused' : isActive ? 'Active' : booking.status} />
           <View style={{ height: 4 }} />
           <PaymentGateBadge isCleared={gate.isCleared} />
         </View>
@@ -136,13 +143,19 @@ export function RentalCard({ booking, onDispatch, onCollectCash, onPause, onResu
         <View style={styles.financialDetail}>
           <FinLine label="Base Rent"   amount={booking.total_amount} />
           <FinLine label="Deposit"     amount={booking.deposit_amount} />
-          {booking.fines_amount > 0 && (
-            <FinLine label="Fines" amount={booking.fines_amount} color={Colors.statusError} />
+          {totalFines > 0 && (
+            <FinLine label="Fines" amount={totalFines} color={Colors.statusError} />
           )}
           <FinLine label="Amount Paid" amount={booking.amount_paid} color={Colors.statusActive} />
           <View style={styles.finDivider} />
           <FinLine
-            label={booking.rental_plan === 'Weekly' ? 'Gate (100%)' : 'Gate (min ₹4,000)'}
+            label={
+              booking.rental_plan === 'Weekly'
+                ? 'Gate (100%)'
+                : gate.isSecondPartOverdue
+                  ? 'Gate (100% - 2nd Part)'
+                  : 'Gate (min ₹4,000)'
+            }
             amount={gate.gateAmount}
             color={Colors.brandTeal}
           />

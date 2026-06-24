@@ -6,6 +6,7 @@
 // ─────────────────────────────────────────────────────────────────────────────
 
 import { Ionicons } from '@expo/vector-icons';
+import * as Updates from 'expo-updates';
 import { router } from 'expo-router';
 import React, { useRef, useState } from 'react';
 import {
@@ -163,6 +164,12 @@ export function YanaHeader({ storeName, role, onSignOut }: YanaHeaderProps) {
                 </Pressable>
               );
             })}
+            <View style={styles.debugFooter}>
+              <Text style={styles.debugTitle}>OTA UPDATE STATUS</Text>
+              <Text style={styles.debugVal}>Channel: {Updates.channel || 'N/A'}</Text>
+              <Text style={styles.debugVal}>Type: {Updates.isEmbeddedLaunch ? 'Embedded Build' : 'OTA Update'}</Text>
+              <Text style={styles.debugVal} numberOfLines={1}>ID: {Updates.updateId ? Updates.updateId.substring(0, 8) : 'None'}</Text>
+            </View>
           </Animated.View>
         </Modal>
       )}
@@ -280,5 +287,26 @@ const styles = StyleSheet.create({
     fontWeight: '800',
     color: Colors.textMuted,
     letterSpacing: 0.5,
+  },
+  debugFooter: {
+    padding: Spacing.sm,
+    backgroundColor: Colors.bgApp,
+    borderTopWidth: 1,
+    borderTopColor: Colors.borderLight,
+    paddingHorizontal: Spacing.md,
+    paddingVertical: 10,
+  },
+  debugTitle: {
+    fontSize: 9,
+    fontWeight: '800',
+    color: Colors.textMuted,
+    letterSpacing: 0.5,
+    marginBottom: 4,
+  },
+  debugVal: {
+    fontSize: 10,
+    color: Colors.textSecondary,
+    fontFamily: 'System',
+    lineHeight: 14,
   },
 });

@@ -47,22 +47,72 @@ export default function OverviewScreen() {
   };
 
   // ── Derived KPIs ─────────────────────────────────────────────────────────
-  const activeBookings   = (bookings as BookingWithDetails[] | undefined)?.filter((b) => b.status === 'Active').length ?? 0;
+  const activeBookings = (bookings as BookingWithDetails[] | undefined)?.filter((b) => {
+    if (b.status !== 'Active') return false;
+    const gate = calculatePaymentGate(
+      b.rental_plan,
+      b.total_amount,
+      b.deposit_amount,
+      b.fines_amount,
+      b.amount_paid,
+      b.customer.start_date,
+      b.customer.end_date,
+    );
+
+    const isOverdue = (() => {
+      const end = b.customer.end_date ? new Date(b.customer.end_date) : null;
+      if (!end) return false;
+      end.setHours(0, 0, 0, 0);
+      const today = new Date();
+      today.setHours(0, 0, 0, 0);
+      return end < today;
+    })();
+
+    const isOverdueAndUnpaid = (isOverdue || gate.isSecondPartOverdue) && !gate.isCleared;
+    return !isOverdueAndUnpaid;
+  }).length ?? 0;
+
   const totalBookings    = bookings?.length ?? 0;
   const vehiclesIdle     = vehicles?.filter((v) => v.status === 'Available').length ?? 0;
 
   const paymentsPending = (bookings as BookingWithDetails[] | undefined)
     ?.filter((b) => b.status === 'Active' || b.status === 'Paused' || b.status === 'Draft')
     .reduce((sum, b) => {
-      const balance = b.total_amount + b.deposit_amount + b.fines_amount - b.amount_paid;
+      const gate = calculatePaymentGate(
+        b.rental_plan,
+        b.total_amount,
+        b.deposit_amount,
+        b.fines_amount,
+        b.amount_paid,
+        b.customer.start_date,
+        b.customer.end_date,
+      );
+      const totalFines = b.fines_amount + gate.overdueFine;
+      const balance = b.total_amount + b.deposit_amount + totalFines - b.amount_paid;
       return sum + Math.max(0, balance);
     }, 0) ?? 0;
 
   const today = new Date();
+  today.setHours(0, 0, 0, 0);
+  
   const overdueBookings = (bookings as BookingWithDetails[] | undefined)?.filter((b) => {
     if (b.status !== 'Active') return false;
     const endDate = b.customer.end_date ? new Date(b.customer.end_date) : null;
-    return endDate && endDate < today;
+    if (endDate) endDate.setHours(0, 0, 0, 0);
+    const endOverdue = endDate && endDate < today;
+
+    let secondPartOverdue = false;
+    if (b.rental_plan === 'Monthly' && b.customer.start_date) {
+      const startDate = new Date(b.customer.start_date);
+      startDate.setHours(0, 0, 0, 0);
+      const secondPartDueDate = new Date(startDate);
+      secondPartDueDate.setDate(startDate.getDate() + 9);
+      if (today > secondPartDueDate && b.amount_paid < (b.total_amount + b.deposit_amount)) {
+        secondPartOverdue = true;
+      }
+    }
+
+    return endOverdue || secondPartOverdue;
   }) ?? [];
 
   const targetRentals = selectedStore?.target_rentals ?? 10;

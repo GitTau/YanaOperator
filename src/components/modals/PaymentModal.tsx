@@ -56,6 +56,8 @@ export function PaymentModal({
         booking.deposit_amount,
         booking.fines_amount,
         booking.amount_paid,
+        booking.customer.start_date,
+        booking.customer.end_date,
       )
     : null;
 
@@ -68,6 +70,8 @@ export function PaymentModal({
         booking.deposit_amount,
         booking.fines_amount,
         booking.amount_paid + previewAmount,
+        booking.customer.start_date,
+        booking.customer.end_date,
       )
     : null;
 
@@ -105,7 +109,9 @@ export function PaymentModal({
 
   if (!booking) return null;
 
-  const balanceDue = booking.total_amount + booking.deposit_amount + booking.fines_amount - booking.amount_paid;
+  const overdueFine = gate ? gate.overdueFine : 0;
+  const totalFines = booking.fines_amount + overdueFine;
+  const balanceDue = booking.total_amount + booking.deposit_amount + totalFines - booking.amount_paid;
 
   return (
     <Modal visible={visible} animationType="slide" presentationStyle="pageSheet" onRequestClose={handleClose}>
@@ -139,8 +145,8 @@ export function PaymentModal({
           {/* Payment breakdown */}
           <PaymentLine label="Total Rent" amount={booking.total_amount} />
           <PaymentLine label="Security Deposit" amount={booking.deposit_amount} />
-          {booking.fines_amount > 0 && (
-            <PaymentLine label="Fines" amount={booking.fines_amount} valueColor={Colors.statusOverdue} />
+          {totalFines > 0 && (
+            <PaymentLine label="Fines" amount={totalFines} valueColor={Colors.statusOverdue} />
           )}
           <PaymentLine label="Already Paid" amount={booking.amount_paid} valueColor={Colors.statusActive} />
 

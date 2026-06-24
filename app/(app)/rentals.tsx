@@ -29,7 +29,7 @@ import { EmptyState, ErrorBanner, SearchBar, SkeletonCard } from '../../src/comp
 import { useBatteries, useBookings, useCustomers, useGlobalConfig, useVehicles, queryKeys } from '../../src/hooks/useQueries';
 import { useAuthStore } from '../../src/stores/authStore';
 import { useStoreSelectionStore } from '../../src/stores/storeSelectionStore';
-import { dispatchBooking } from '../../src/services/bookingService';
+import { dispatchBooking, calculatePaymentGate } from '../../src/services/bookingService';
 import type { BookingStatus, BookingWithDetails } from '../../src/lib/database.types';
 
 type FilterStatus = 'All' | BookingStatus;
@@ -52,11 +52,40 @@ const STATUS_COLORS: Partial<Record<FilterStatus, { active: string; bg: string }
 
 function HistorySummaryCard({ bookings }: { bookings: BookingWithDetails[] }) {
   const counts = {
-    Active:    bookings.filter(b => b.status === 'Active').length,
-    Paused:    bookings.filter(b => b.status === 'Paused').length,
-    Completed: bookings.filter(b => b.status === 'Completed').length,
-    Cancelled: bookings.filter(b => b.status === 'Cancelled').length,
+    Active:    0,
+    Paused:    0,
+    Completed: 0,
+    Cancelled: 0,
   };
+
+  bookings.forEach((b) => {
+    const gate = calculatePaymentGate(
+      b.rental_plan,
+      b.total_amount,
+      b.deposit_amount,
+      b.fines_amount,
+      b.amount_paid,
+      b.customer.start_date,
+      b.customer.end_date,
+    );
+
+    const isOverdue = (() => {
+      const end = b.customer.end_date ? new Date(b.customer.end_date) : null;
+      if (!end) return false;
+      end.setHours(0, 0, 0, 0);
+      const today = new Date();
+      today.setHours(0, 0, 0, 0);
+      return end < today;
+    })();
+
+    const isOverdueAndUnpaid = (isOverdue || gate.isSecondPartOverdue) && !gate.isCleared;
+    const effectiveStatus = (b.status === 'Active' && isOverdueAndUnpaid) ? 'Paused' : b.status;
+
+    if (effectiveStatus === 'Active') counts.Active++;
+    else if (effectiveStatus === 'Paused') counts.Paused++;
+    else if (effectiveStatus === 'Completed') counts.Completed++;
+    else if (effectiveStatus === 'Cancelled') counts.Cancelled++;
+  });
 
   return (
     <View style={summaryStyles.card}>
@@ -153,7 +182,30 @@ export default function RentalsScreen() {
       : raw; // Master History = all statuses
 
     // Status chip filter
-    const byStatus = statusFilter === 'All' ? board : board.filter(b => b.status === statusFilter);
+    const byStatus = statusFilter === 'All' ? board : board.filter(b => {
+      const gate = calculatePaymentGate(
+        b.rental_plan,
+        b.total_amount,
+        b.deposit_amount,
+        b.fines_amount,
+        b.amount_paid,
+        b.customer.start_date,
+        b.customer.end_date,
+      );
+
+      const isOverdue = (() => {
+        const end = b.customer.end_date ? new Date(b.customer.end_date) : null;
+        if (!end) return false;
+        end.setHours(0, 0, 0, 0);
+        const today = new Date();
+        today.setHours(0, 0, 0, 0);
+        return end < today;
+      })();
+
+      const isOverdueAndUnpaid = (isOverdue || gate.isSecondPartOverdue) && !gate.isCleared;
+      const effectiveStatus = (b.status === 'Active' && isOverdueAndUnpaid) ? 'Paused' : b.status;
+      return effectiveStatus === statusFilter;
+    });
 
     // Search filter
     const q = search.toLowerCase().trim();
