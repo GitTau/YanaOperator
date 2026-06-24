@@ -40,9 +40,14 @@ export function PaymentModal({
   storeId,
   operatorId,
 }: PaymentModalProps) {
-  const [amount, setAmount] = useState('');
+  const [cashAmount, setCashAmount] = useState('');
+  const [onlineAmount, setOnlineAmount] = useState('');
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
+
+  const cashParsed = parseFloat(cashAmount) || 0;
+  const onlineParsed = parseFloat(onlineAmount) || 0;
+  const totalEntered = cashParsed + onlineParsed;
 
   const gate = booking
     ? calculatePaymentGate(
@@ -55,7 +60,7 @@ export function PaymentModal({
     : null;
 
   // Preview: what gate looks like after this payment
-  const previewAmount = parseFloat(amount) || 0;
+  const previewAmount = totalEntered;
   const gateAfter = booking
     ? calculatePaymentGate(
         booking.rental_plan,
@@ -68,9 +73,8 @@ export function PaymentModal({
 
   const handleSubmit = async () => {
     if (!booking) return;
-    const parsed = parseFloat(amount);
-    if (!parsed || parsed <= 0) {
-      setError('Enter a valid amount');
+    if (totalEntered <= 0) {
+      setError('Enter a valid cash or online amount');
       return;
     }
     setLoading(true);
@@ -79,7 +83,8 @@ export function PaymentModal({
       await recordPayment({
         p_booking_id: booking.id,
         p_store_id: storeId,
-        p_amount: parsed,
+        p_cash_amount: cashParsed,
+        p_online_amount: onlineParsed,
         p_operator_id: operatorId,
       });
       handleClose();
@@ -92,7 +97,8 @@ export function PaymentModal({
   };
 
   const handleClose = () => {
-    setAmount('');
+    setCashAmount('');
+    setOnlineAmount('');
     setError(null);
     onClose();
   };
@@ -162,16 +168,41 @@ export function PaymentModal({
             </Text>
           </View>
 
-          {/* Amount input */}
-          <Text style={[Typography.labelCaps, styles.fieldLabel]}>AMOUNT (₹)</Text>
-          <TextInput
-            style={styles.amountInput}
-            value={amount}
-            onChangeText={(t) => { setAmount(t); setError(null); }}
-            keyboardType="numeric"
-            placeholder="0"
-            placeholderTextColor={Colors.textSecondary}
-          />
+          {/* Cash & Online Split Inputs */}
+          <View style={styles.inputsRow}>
+            <View style={styles.inputCol}>
+              <Text style={[Typography.labelCaps, styles.fieldLabel]}>CASH PAYMENT (₹)</Text>
+              <TextInput
+                style={styles.splitAmountInput}
+                value={cashAmount}
+                onChangeText={(t) => { setCashAmount(t); setError(null); }}
+                keyboardType="numeric"
+                placeholder="0"
+                placeholderTextColor={Colors.textSecondary}
+              />
+            </View>
+            <View style={styles.inputCol}>
+              <Text style={[Typography.labelCaps, styles.fieldLabel]}>ONLINE PAYMENT (₹)</Text>
+              <TextInput
+                style={styles.splitAmountInput}
+                value={onlineAmount}
+                onChangeText={(t) => { setOnlineAmount(t); setError(null); }}
+                keyboardType="numeric"
+                placeholder="0"
+                placeholderTextColor={Colors.textSecondary}
+              />
+            </View>
+          </View>
+
+          {/* Total display box */}
+          {totalEntered > 0 && (
+            <View style={styles.totalCollectedBox}>
+              <Text style={[Typography.labelCaps, { color: Colors.textSecondary, fontSize: 10 }]}>TOTAL COLLECTED</Text>
+              <Text style={[Typography.h1Screen, { color: Colors.brandTeal, fontWeight: '800', marginTop: 4, fontSize: 24 }]}>
+                {formatCurrency(totalEntered)}
+              </Text>
+            </View>
+          )}
 
           {/* Preview */}
           {previewAmount > 0 && gateAfter && (
@@ -200,7 +231,7 @@ export function PaymentModal({
             label="Confirm Payment"
             variant="primary"
             loading={loading}
-            disabled={!amount || parseFloat(amount) <= 0}
+            disabled={totalEntered <= 0}
             onPress={handleSubmit}
             style={styles.submitBtn}
           />
@@ -234,6 +265,29 @@ const styles = StyleSheet.create({
     height: 60, backgroundColor: Colors.surfaceCard, borderRadius: Radius.card,
     borderWidth: 1.5, borderColor: Colors.brandCyan,
     paddingHorizontal: Spacing.md, fontSize: 28, fontWeight: '700', color: Colors.textPrimary,
+  },
+  inputsRow: {
+    flexDirection: 'row',
+    gap: Spacing.sm,
+    marginBottom: Spacing.sm,
+  },
+  inputCol: {
+    flex: 1,
+  },
+  splitAmountInput: {
+    height: 52, backgroundColor: Colors.surfaceCard, borderRadius: Radius.input,
+    borderWidth: 1.5, borderColor: Colors.brandCyan,
+    paddingHorizontal: Spacing.sm, fontSize: 20, fontWeight: '700', color: Colors.textPrimary,
+    textAlign: 'center',
+  },
+  totalCollectedBox: {
+    marginTop: Spacing.md,
+    backgroundColor: Colors.bgApp,
+    padding: Spacing.md,
+    borderRadius: Radius.card,
+    alignItems: 'center',
+    borderWidth: 1,
+    borderColor: Colors.borderLight,
   },
   previewBox: { flexDirection: 'row', alignItems: 'center', marginTop: Spacing.sm, backgroundColor: Colors.bgApp, padding: Spacing.sm, borderRadius: Radius.sm },
   errorText: { color: Colors.statusOverdue, ...Typography.bodySecondary, marginTop: Spacing.sm },

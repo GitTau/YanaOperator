@@ -93,6 +93,8 @@ export interface Booking {
   deposit_amount: number;
   fines_amount: number;
   amount_paid: number;
+  amount_paid_cash: number | null;
+  amount_paid_online: number | null;
   is_settled: boolean;
   checklist: string[] | null;
   created_at: string;
@@ -207,7 +209,8 @@ export interface CreateBookingParams {
 export interface RecordPaymentParams {
   p_booking_id: string;
   p_store_id: string;
-  p_amount: number;
+  p_cash_amount: number;
+  p_online_amount: number;
   p_operator_id: string;
 }
 
