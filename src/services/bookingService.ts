@@ -23,6 +23,24 @@ export function isBookingAllowed(config: GlobalConfig | null | undefined): {
   return { allowed: true };
 }
 
+// ── Timezone-Safe Date Parsing & Formatting ────────────────────────────────────
+export function parseLocalDate(dateStr: string | null | undefined): Date | null {
+  if (!dateStr) return null;
+  const parts = dateStr.split('-');
+  if (parts.length !== 3) return null;
+  const year = parseInt(parts[0], 10);
+  const month = parseInt(parts[1], 10) - 1;
+  const day = parseInt(parts[2], 10);
+  return new Date(year, month, day);
+}
+
+export function formatLocalDate(date: Date): string {
+  const year = date.getFullYear();
+  const month = String(date.getMonth() + 1).padStart(2, '0');
+  const day = String(date.getDate()).padStart(2, '0');
+  return `${year}-${month}-${day}`;
+}
+
 // ── Overdue Fines Calculation ───────────────────────────────────────────────
 // Standard: Grace period 1 day. Fines accumulate starting day 2 (₹300/day).
 // Monthly 2nd part: due date T+9 days. Grace period T+10 and T+11.
@@ -43,10 +61,12 @@ export function calculateOverdueFines(
     return { overdueFine: 0, isSecondPartOverdue: false, secondPartDueDateStr: null };
   }
 
-  const startDate = new Date(startDateStr);
+  const startDate = parseLocalDate(startDateStr);
+  const endDate = parseLocalDate(endDateStr);
+  if (!startDate || !endDate) {
+    return { overdueFine: 0, isSecondPartOverdue: false, secondPartDueDateStr: null };
+  }
   startDate.setHours(0, 0, 0, 0);
-
-  const endDate = new Date(endDateStr);
   endDate.setHours(0, 0, 0, 0);
 
   const today = new Date();
@@ -69,7 +89,7 @@ export function calculateOverdueFines(
   if (rentalPlan === 'Monthly') {
     const secondPartDueDate = new Date(startDate);
     secondPartDueDate.setDate(startDate.getDate() + 9);
-    secondPartDueDateStr = secondPartDueDate.toISOString().split('T')[0];
+    secondPartDueDateStr = formatLocalDate(secondPartDueDate);
 
     if (today > secondPartDueDate) {
       isSecondPartOverdue = true;
@@ -137,7 +157,7 @@ export function calculatePaymentGate(
   }
 
   const gatePct = rentalPlan === 'Weekly' ? 1.0 : (isSecondPartOverdue ? 1.0 : null);
-  const paidPct = totalOwed > 0 ? amountPaid / totalOwed : 1;
+  const paidPct = gateAmount > 0 ? Math.min(amountPaid / gateAmount, 1) : 1;
 
   return {
     gatePct,
@@ -185,7 +205,12 @@ export async function createBooking(
   // Reset it back to 'Draft' and clear started_at.
   const { error: bookingResetError } = await supabase
     .from('bookings')
-    .update({ status: 'Draft', started_at: null })
+    .update({
+      status: 'Draft',
+      started_at: null,
+      start_date: start_date || null,
+      end_date: end_date || null,
+    })
     .eq('id', bookingId);
   if (bookingResetError) {
     console.error('[createBooking] Failed to reset booking status to Draft:', bookingResetError.message);

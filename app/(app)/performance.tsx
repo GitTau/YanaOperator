@@ -34,15 +34,17 @@ import {
   type AppraisalCycle,
 } from '../../src/hooks/useQueries';
 import { useStoreSelectionStore } from '../../src/stores/storeSelectionStore';
+import { parseLocalDate, formatLocalDate } from '../../src/services/bookingService';
 
 // ── Helpers ───────────────────────────────────────────────────────────────────
 
 function todayISO(): string {
-  return new Date().toISOString().split('T')[0];
+  return formatLocalDate(new Date());
 }
 
 function daysRemaining(endDate: string): number {
-  const end = new Date(endDate);
+  const end = parseLocalDate(endDate);
+  if (!end) return 0;
   const now = new Date();
   end.setHours(23, 59, 59, 999);
   const diff = Math.ceil((end.getTime() - now.getTime()) / (1000 * 60 * 60 * 24));
@@ -50,7 +52,9 @@ function daysRemaining(endDate: string): number {
 }
 
 function formatDate(iso: string): string {
-  return new Date(iso).toLocaleDateString('en-IN', {
+  const d = parseLocalDate(iso);
+  if (!d) return iso;
+  return d.toLocaleDateString('en-IN', {
     day: 'numeric',
     month: 'short',
     year: 'numeric',

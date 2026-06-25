@@ -143,8 +143,8 @@ export function ReturnModal({ visible, booking, onClose, onSuccess, damageFines 
 
   const { overdueFine } = calculateOverdueFines(
     booking.rental_plan,
-    booking.customer.start_date,
-    booking.customer.end_date,
+    booking.start_date,
+    booking.end_date,
     booking.total_amount,
     booking.deposit_amount,
     booking.amount_paid,

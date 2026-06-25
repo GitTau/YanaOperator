@@ -29,7 +29,7 @@ import { EmptyState, ErrorBanner, SearchBar, SkeletonCard } from '../../src/comp
 import { useBatteries, useBookings, useCustomers, useGlobalConfig, useVehicles, queryKeys } from '../../src/hooks/useQueries';
 import { useAuthStore } from '../../src/stores/authStore';
 import { useStoreSelectionStore } from '../../src/stores/storeSelectionStore';
-import { dispatchBooking, calculatePaymentGate } from '../../src/services/bookingService';
+import { dispatchBooking, calculatePaymentGate, parseLocalDate } from '../../src/services/bookingService';
 import type { BookingStatus, BookingWithDetails } from '../../src/lib/database.types';
 
 type FilterStatus = 'All' | BookingStatus;
@@ -65,12 +65,12 @@ function HistorySummaryCard({ bookings }: { bookings: BookingWithDetails[] }) {
       b.deposit_amount,
       b.fines_amount,
       b.amount_paid,
-      b.customer.start_date,
-      b.customer.end_date,
+      b.start_date,
+      b.end_date,
     );
 
     const isOverdue = (() => {
-      const end = b.customer.end_date ? new Date(b.customer.end_date) : null;
+      const end = b.end_date ? parseLocalDate(b.end_date) : null;
       if (!end) return false;
       end.setHours(0, 0, 0, 0);
       const today = new Date();
@@ -189,12 +189,12 @@ export default function RentalsScreen() {
         b.deposit_amount,
         b.fines_amount,
         b.amount_paid,
-        b.customer.start_date,
-        b.customer.end_date,
+        b.start_date,
+        b.end_date,
       );
 
       const isOverdue = (() => {
-        const end = b.customer.end_date ? new Date(b.customer.end_date) : null;
+        const end = b.end_date ? parseLocalDate(b.end_date) : null;
         if (!end) return false;
         end.setHours(0, 0, 0, 0);
         const today = new Date();

@@ -27,7 +27,7 @@ import {
 } from '../../src/components/ui';
 import { useBookings, useGlobalConfig, useVehicles, queryKeys } from '../../src/hooks/useQueries';
 import { useStoreSelectionStore } from '../../src/stores/storeSelectionStore';
-import { formatCurrency, calculatePaymentGate } from '../../src/services/bookingService';
+import { formatCurrency, calculatePaymentGate, parseLocalDate } from '../../src/services/bookingService';
 import type { BookingWithDetails } from '../../src/lib/database.types';
 
 export default function OverviewScreen() {
@@ -55,12 +55,12 @@ export default function OverviewScreen() {
       b.deposit_amount,
       b.fines_amount,
       b.amount_paid,
-      b.customer.start_date,
-      b.customer.end_date,
+      b.start_date,
+      b.end_date,
     );
 
     const isOverdue = (() => {
-      const end = b.customer.end_date ? new Date(b.customer.end_date) : null;
+      const end = b.end_date ? parseLocalDate(b.end_date) : null;
       if (!end) return false;
       end.setHours(0, 0, 0, 0);
       const today = new Date();
@@ -92,12 +92,11 @@ export default function OverviewScreen() {
         b.deposit_amount,
         b.fines_amount,
         b.amount_paid,
-        b.customer.start_date,
-        b.customer.end_date,
+        b.start_date,
+        b.end_date,
       );
-      const totalFines = b.fines_amount + gate.overdueFine;
-      const balance = b.total_amount + b.deposit_amount + totalFines - b.amount_paid;
-      return sum + Math.max(0, balance);
+      const balance = Math.max(0, gate.gateAmount - b.amount_paid);
+      return sum + balance;
     }, 0) ?? 0;
 
   const today = new Date();
@@ -105,18 +104,20 @@ export default function OverviewScreen() {
   
   const overdueBookings = (bookings as BookingWithDetails[] | undefined)?.filter((b) => {
     if (b.status !== 'Active') return false;
-    const endDate = b.customer.end_date ? new Date(b.customer.end_date) : null;
+    const endDate = b.end_date ? parseLocalDate(b.end_date) : null;
     if (endDate) endDate.setHours(0, 0, 0, 0);
     const endOverdue = endDate && endDate < today;
 
     let secondPartOverdue = false;
-    if (b.rental_plan === 'Monthly' && b.customer.start_date) {
-      const startDate = new Date(b.customer.start_date);
-      startDate.setHours(0, 0, 0, 0);
-      const secondPartDueDate = new Date(startDate);
-      secondPartDueDate.setDate(startDate.getDate() + 9);
-      if (today > secondPartDueDate && b.amount_paid < (b.total_amount + b.deposit_amount)) {
-        secondPartOverdue = true;
+    if (b.rental_plan === 'Monthly' && b.start_date) {
+      const startDate = parseLocalDate(b.start_date);
+      if (startDate) {
+        startDate.setHours(0, 0, 0, 0);
+        const secondPartDueDate = new Date(startDate);
+        secondPartDueDate.setDate(startDate.getDate() + 9);
+        if (today > secondPartDueDate && b.amount_paid < (b.total_amount + b.deposit_amount)) {
+          secondPartOverdue = true;
+        }
       }
     }
 

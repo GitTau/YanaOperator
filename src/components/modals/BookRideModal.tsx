@@ -22,6 +22,8 @@ import {
   calculatePricing,
   createBooking,
   formatCurrency,
+  parseLocalDate,
+  formatLocalDate,
 } from '../../services/bookingService';
 import { YanaButton } from '../ui';
 import { CalendarModal } from './CalendarModal';
@@ -135,13 +137,13 @@ function DropdownSelector<T>({
 }
 
 const formatDate = (date: Date): string => {
-  return date.toISOString().split('T')[0]; // YYYY-MM-DD
+  return formatLocalDate(date); // YYYY-MM-DD
 };
 
 const getDisplayDate = (dateString: string): string => {
   try {
-    const d = new Date(dateString);
-    if (isNaN(d.getTime())) return dateString;
+    const d = parseLocalDate(dateString);
+    if (!d || isNaN(d.getTime())) return dateString;
     return d.toLocaleDateString('en-IN', { day: 'numeric', month: 'short', year: 'numeric' });
   } catch {
     return dateString;
@@ -150,8 +152,8 @@ const getDisplayDate = (dateString: string): string => {
 
 const addDays = (dateString: string, days: number): string => {
   try {
-    const d = new Date(dateString);
-    if (isNaN(d.getTime())) return '';
+    const d = parseLocalDate(dateString);
+    if (!d || isNaN(d.getTime())) return '';
     d.setDate(d.getDate() + days);
     return formatDate(d);
   } catch {

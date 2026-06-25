@@ -9,7 +9,7 @@ import React, { useState } from 'react';
 import { Pressable, StyleSheet, Text, View } from 'react-native';
 import { Colors, Radius, Spacing, Typography } from '../constants/design';
 import type { BookingWithDetails } from '../lib/database.types';
-import { calculatePaymentGate, formatCurrency, toNodeId } from '../services/bookingService';
+import { calculatePaymentGate, formatCurrency, toNodeId, parseLocalDate } from '../services/bookingService';
 import { PaymentGateBadge, StatusBadge } from './ui';
 
 interface RentalCardProps {
@@ -28,7 +28,7 @@ export function RentalCard({ booking, onDispatch, onCollectCash, onPause, onResu
   const gate = calculatePaymentGate(
     booking.rental_plan, booking.total_amount,
     booking.deposit_amount, booking.fines_amount, booking.amount_paid,
-    booking.customer.start_date, booking.customer.end_date,
+    booking.start_date, booking.end_date,
   );
 
   const paidPct       = Math.min(gate.paidPct, 1);
@@ -36,14 +36,18 @@ export function RentalCard({ booking, onDispatch, onCollectCash, onPause, onResu
   const barColor      = gate.isCleared ? Colors.statusActive : paidPct >= 0.5 ? Colors.statusWarning : Colors.statusError;
   const totalFines    = booking.fines_amount + gate.overdueFine;
 
-  const returnDue = booking.customer.end_date
-    ? new Date(booking.customer.end_date).toLocaleDateString('en-IN', { day: 'numeric', month: 'short' })
+  const startDisp = booking.start_date
+    ? parseLocalDate(booking.start_date)?.toLocaleDateString('en-IN', { day: 'numeric', month: 'short' })
+    : '—';
+
+  const returnDue = booking.end_date
+    ? parseLocalDate(booking.end_date)?.toLocaleDateString('en-IN', { day: 'numeric', month: 'short' })
     : '—';
 
   const initials = booking.customer.name.slice(0, 2).toUpperCase();
 
   const isOverdue = (() => {
-    const end = booking.customer.end_date ? new Date(booking.customer.end_date) : null;
+    const end = parseLocalDate(booking.end_date);
     if (!end) return false;
     end.setHours(0, 0, 0, 0);
     const today = new Date();
@@ -114,7 +118,7 @@ export function RentalCard({ booking, onDispatch, onCollectCash, onPause, onResu
         </Text>
         <View style={{ flex: 1 }} />
         <Ionicons name="calendar-outline" size={11} color={Colors.textMuted} style={{ marginRight: 3 }} />
-        <Text style={styles.dueLabel}>Due {returnDue}</Text>
+        <Text style={styles.dueLabel}>{startDisp} - {returnDue}</Text>
       </View>
 
       {/* ── Financial Health ──────────────────────────────────────────── */}

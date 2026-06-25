@@ -2,6 +2,7 @@ import { Ionicons } from '@expo/vector-icons';
 import React, { useState } from 'react';
 import { Pressable, StyleSheet, Text, View } from 'react-native';
 import { Colors, Radius, Spacing, Typography } from '../../constants/design';
+import { parseLocalDate, formatLocalDate } from '../../services/bookingService';
 
 interface CalendarModalProps {
   visible: boolean;
@@ -11,14 +12,14 @@ interface CalendarModalProps {
 }
 
 const formatDate = (date: Date): string => {
-  return date.toISOString().split('T')[0]; // YYYY-MM-DD
+  return formatLocalDate(date); // YYYY-MM-DD
 };
 
 export function CalendarModal({ visible, onClose, selectedDate, onSelectDate }: CalendarModalProps) {
   const [currentMonth, setCurrentMonth] = useState(() => {
     // Parse selected date or fallback to today
-    const parsed = new Date(selectedDate);
-    return isNaN(parsed.getTime()) ? new Date() : parsed;
+    const parsed = parseLocalDate(selectedDate);
+    return !parsed || isNaN(parsed.getTime()) ? new Date() : parsed;
   });
 
   const year = currentMonth.getFullYear();

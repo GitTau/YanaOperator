@@ -103,6 +103,8 @@ export interface Booking {
   completed_at: string | null;
   pause_reason: string | null;
   notes: string | null;
+  start_date: string | null;
+  end_date: string | null;
 }
 
 // Booking with joined customer + vehicle + battery data (for rental cards)

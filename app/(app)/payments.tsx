@@ -13,7 +13,7 @@ import { EmptyState, ErrorBanner, KPICard, SkeletonCard } from '../../src/compon
 import { useBookings, queryKeys } from '../../src/hooks/useQueries';
 import { useAuthStore } from '../../src/stores/authStore';
 import { useStoreSelectionStore } from '../../src/stores/storeSelectionStore';
-import { calculatePaymentGate, formatCurrency, toNodeId } from '../../src/services/bookingService';
+import { calculatePaymentGate, formatCurrency, toNodeId, parseLocalDate } from '../../src/services/bookingService';
 import type { BookingWithDetails } from '../../src/lib/database.types';
 
 export default function PaymentsScreen() {
@@ -39,18 +39,17 @@ export default function PaymentsScreen() {
           b.deposit_amount,
           b.fines_amount,
           b.amount_paid,
-          b.customer.start_date,
-          b.customer.end_date,
+          b.start_date,
+          b.end_date,
         );
-        const totalFines = b.fines_amount + gate.overdueFine;
-        const balance = b.total_amount + b.deposit_amount + totalFines - b.amount_paid;
+        const balance = Math.max(0, gate.gateAmount - b.amount_paid);
 
-        const endDate = b.customer.end_date ? new Date(b.customer.end_date) : null;
+        const endDate = b.end_date ? parseLocalDate(b.end_date) : null;
         if (endDate) endDate.setHours(0, 0, 0, 0);
         let daysLate = endDate && endDate < today ? Math.floor((today.getTime() - endDate.getTime()) / 86400000) : 0;
 
         if (b.rental_plan === 'Monthly' && daysLate === 0 && gate.isSecondPartOverdue) {
-          const startDate = b.customer.start_date ? new Date(b.customer.start_date) : null;
+          const startDate = b.start_date ? parseLocalDate(b.start_date) : null;
           if (startDate) {
             startDate.setHours(0, 0, 0, 0);
             const secondPartDueDate = new Date(startDate);
