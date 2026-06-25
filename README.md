@@ -14,6 +14,7 @@ YanaOS is the core operational application for Yana (Yantron Technology Pvt. Ltd
 
 ## Tech Stack 🛠
 - **Frontend Framework:** React Native with Expo (SDK 55)
+- **Target OS:** Android ONLY (iOS is completely out of scope for development/updates)
 - **Routing:** Expo Router (File-based routing)
 - **State Management:** Zustand (Global State) & TanStack React Query (Server State caching & polling)
 - **Database & Auth:** Supabase (Postgres, Auth v2, Storage, Edge Functions)
