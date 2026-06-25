@@ -166,7 +166,9 @@ export function YanaHeader({ storeName, role, onSignOut }: YanaHeaderProps) {
             })}
             <View style={styles.debugFooter}>
               <Text style={styles.debugTitle}>OTA UPDATE STATUS</Text>
+              <Text style={styles.debugVal}>Enabled: {Updates.isEnabled ? 'Yes' : 'No'}</Text>
               <Text style={styles.debugVal}>Channel: {Updates.channel || 'N/A'}</Text>
+              <Text style={styles.debugVal}>Runtime Ver: {Updates.runtimeVersion || 'N/A'}</Text>
               <Text style={styles.debugVal}>Type: {Updates.isEmbeddedLaunch ? 'Embedded Build' : 'OTA Update'}</Text>
               <Text style={styles.debugVal} numberOfLines={1}>ID: {Updates.updateId ? Updates.updateId.substring(0, 8) : 'None'}</Text>
             </View>

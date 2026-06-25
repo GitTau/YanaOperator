@@ -72,7 +72,15 @@ export default function OverviewScreen() {
     return !isOverdueAndUnpaid;
   }).length ?? 0;
 
-  const totalBookings    = bookings?.length ?? 0;
+  const totalRevenueRealised = (bookings as BookingWithDetails[] | undefined)?.reduce((sum, b) => {
+    const amountPaid = b.amount_paid || 0;
+    const depositAmount = b.deposit_amount || 0;
+    const depositCollected = Math.min(amountPaid, depositAmount);
+    const rentalCollected = amountPaid - depositCollected;
+    return sum + rentalCollected;
+  }, 0) ?? 0;
+
+  const captainEarnings = totalRevenueRealised * 0.03;
   const vehiclesIdle     = vehicles?.filter((v) => v.status === 'Available').length ?? 0;
 
   const paymentsPending = (bookings as BookingWithDetails[] | undefined)
@@ -170,9 +178,10 @@ export default function OverviewScreen() {
               </View>
               <View style={styles.kpiRow}>
                 <KPICard
-                  label="TOTAL BOOKINGS"
-                  value={totalBookings}
-                  icon="document-text-outline"
+                  label="CAPTAIN EARNINGS"
+                  value={formatCurrency(captainEarnings)}
+                  accentColor={Colors.brandTeal}
+                  icon="cash-outline"
                 />
                 <KPICard
                   label="PENDING DUES"
