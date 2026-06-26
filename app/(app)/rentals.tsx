@@ -67,6 +67,7 @@ function HistorySummaryCard({ bookings }: { bookings: BookingWithDetails[] }) {
       b.amount_paid,
       b.start_date,
       b.end_date,
+      b.status,
     );
 
     const isOverdue = (() => {
@@ -191,6 +192,7 @@ export default function RentalsScreen() {
         b.amount_paid,
         b.start_date,
         b.end_date,
+        b.status,
       );
 
       const isOverdue = (() => {

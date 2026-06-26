@@ -29,6 +29,7 @@ export function RentalCard({ booking, onDispatch, onCollectCash, onPause, onResu
     booking.rental_plan, booking.total_amount,
     booking.deposit_amount, booking.fines_amount, booking.amount_paid,
     booking.start_date, booking.end_date,
+    booking.status,
   );
 
   const paidPct       = Math.min(gate.paidPct, 1);

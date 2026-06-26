@@ -41,6 +41,7 @@ export default function PaymentsScreen() {
           b.amount_paid,
           b.start_date,
           b.end_date,
+          b.status,
         );
         const balance = Math.max(0, gate.gateAmount - b.amount_paid);
 

@@ -57,6 +57,7 @@ export default function OverviewScreen() {
       b.amount_paid,
       b.start_date,
       b.end_date,
+      b.status,
     );
 
     const isOverdue = (() => {
@@ -94,6 +95,7 @@ export default function OverviewScreen() {
         b.amount_paid,
         b.start_date,
         b.end_date,
+        b.status,
       );
       const balance = Math.max(0, gate.gateAmount - b.amount_paid);
       return sum + balance;

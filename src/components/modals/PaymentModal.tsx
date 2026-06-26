@@ -58,6 +58,7 @@ export function PaymentModal({
         booking.amount_paid,
         booking.start_date,
         booking.end_date,
+        booking.status,
       )
     : null;
 
@@ -72,6 +73,7 @@ export function PaymentModal({
         booking.amount_paid + previewAmount,
         booking.start_date,
         booking.end_date,
+        booking.status,
       )
     : null;
 

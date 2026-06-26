@@ -52,11 +52,16 @@ export function calculateOverdueFines(
   totalAmount: number,
   depositAmount: number,
   amountPaid: number,
+  status?: string | null,
 ): {
   overdueFine: number;
   isSecondPartOverdue: boolean;
   secondPartDueDateStr: string | null;
 } {
+  if (status === 'Completed' || status === 'Cancelled') {
+    return { overdueFine: 0, isSecondPartOverdue: false, secondPartDueDateStr: null };
+  }
+
   if (!startDateStr || !endDateStr) {
     return { overdueFine: 0, isSecondPartOverdue: false, secondPartDueDateStr: null };
   }
@@ -123,6 +128,7 @@ export function calculatePaymentGate(
   amountPaid: number,
   startDateStr?: string | null,
   endDateStr?: string | null,
+  status?: string | null,
 ): {
   gatePct: number | null;  // null for Monthly (fixed floor, not a %)
   gateAmount: number;
@@ -139,6 +145,7 @@ export function calculatePaymentGate(
     totalAmount,
     depositAmount,
     amountPaid,
+    status,
   );
 
   const totalFines = finesAmount + overdueFine;

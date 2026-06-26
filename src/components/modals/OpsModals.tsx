@@ -148,6 +148,7 @@ export function ReturnModal({ visible, booking, onClose, onSuccess, damageFines 
     booking.total_amount,
     booking.deposit_amount,
     booking.amount_paid,
+    booking.status,
   );
   const totalFines = booking.fines_amount + overdueFine;
   const balanceDue        = booking.total_amount + booking.deposit_amount + totalFines - booking.amount_paid;
