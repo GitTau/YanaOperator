@@ -100,6 +100,7 @@ export interface Booking {
   created_at: string;
   started_at: string | null;
   paused_at: string | null;
+  pause_end_at: string | null;
   completed_at: string | null;
   pause_reason: string | null;
   notes: string | null;

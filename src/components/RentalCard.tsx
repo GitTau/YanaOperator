@@ -20,9 +20,10 @@ interface RentalCardProps {
   onResume:      (b: BookingWithDetails) => void;
   onReturn:      (b: BookingWithDetails) => void;
   onSwap:        (b: BookingWithDetails) => void;
+  onRenew:       (b: BookingWithDetails) => void;
 }
 
-export function RentalCard({ booking, onDispatch, onCollectCash, onPause, onResume, onReturn, onSwap }: RentalCardProps) {
+export function RentalCard({ booking, onDispatch, onCollectCash, onPause, onResume, onReturn, onSwap, onRenew }: RentalCardProps) {
   const [financialExpanded, setFinancialExpanded] = useState(false);
 
   const gate = calculatePaymentGate(
@@ -56,11 +57,9 @@ export function RentalCard({ booking, onDispatch, onCollectCash, onPause, onResu
     return end < today;
   })();
 
-  const isOverdueAndUnpaid = (isOverdue || gate.isSecondPartOverdue) && !gate.isCleared;
-
   const isDraft  = booking.status === 'Draft';
-  const isActive = booking.status === 'Active' && !isOverdueAndUnpaid;
-  const isPaused = booking.status === 'Paused' || (booking.status === 'Active' && isOverdueAndUnpaid);
+  const isActive = booking.status === 'Active';
+  const isPaused = booking.status === 'Paused';
   const isClosed = booking.status === 'Completed' || booking.status === 'Cancelled';
 
   return (
@@ -170,77 +169,14 @@ export function RentalCard({ booking, onDispatch, onCollectCash, onPause, onResu
       {/* ── Actions ──────────────────────────────────────────────────── */}
       {!isClosed && (
         <View style={styles.actionBlock}>
-          {/* Asset pills — only show when booking is not a Draft (already active/paused) */}
-          {!isDraft && (
-            <View style={styles.assetPillRow}>
-              <Pressable style={styles.assetPill} onPress={() => onSwap(booking)}>
-                <Ionicons name="bicycle-outline" size={13} color={Colors.textSecondary} />
-                <Text style={styles.assetPillText}>SWAP SCOOTER</Text>
-              </Pressable>
-              <Pressable style={styles.assetPill} onPress={() => onSwap(booking)}>
-                <Ionicons name="battery-charging-outline" size={13} color={Colors.textSecondary} />
-                <Text style={styles.assetPillText}>SWAP BATTERY</Text>
-              </Pressable>
-            </View>
-          )}
-
-          {/* Draft → Dispatch */}
-          {isDraft && (
-            <Pressable
-              style={({ pressed }) => [
-                styles.primaryBtn,
-                gate.isCleared ? styles.primaryBtnActive : styles.primaryBtnLocked,
-                { opacity: pressed ? 0.85 : 1 },
-              ]}
-              onPress={() => onDispatch(booking)}
-              disabled={!gate.isCleared}
-            >
-              <Ionicons
-                name={gate.isCleared ? 'rocket-outline' : 'lock-closed-outline'}
-                size={15}
-                color={gate.isCleared ? Colors.brandNavy : Colors.textMuted}
-                style={{ marginRight: 7 }}
-              />
-              <View>
-                <Text style={[styles.primaryBtnText, { color: gate.isCleared ? Colors.brandNavy : Colors.textMuted }]}>
-                  DISPATCH RIDE
-                </Text>
-                {!gate.isCleared && (
-                  <Text style={styles.gateLockHint}>Clear payment gate first</Text>
-                )}
-              </View>
-            </Pressable>
-          )}
-
-          {/* Active → Pause + Return */}
-          {isActive && (
-            <View style={styles.twoColRow}>
-              <Pressable
-                style={({ pressed }) => [styles.halfBtn, styles.halfBtnOrange, { opacity: pressed ? 0.85 : 1 }]}
-                onPress={() => onPause(booking)}
-              >
-                <Ionicons name="pause-outline" size={14} color="#FFFFFF" style={{ marginRight: 4 }} />
-                <Text style={[styles.halfBtnText, { color: '#FFFFFF' }]}>PAUSE</Text>
-              </Pressable>
-              <Pressable
-                style={({ pressed }) => [styles.halfBtn, styles.halfBtnGreen, { opacity: pressed ? 0.85 : 1 }]}
-                onPress={() => onReturn(booking)}
-              >
-                <Ionicons name="checkmark-circle-outline" size={14} color="#FFFFFF" style={{ marginRight: 4 }} />
-                <Text style={[styles.halfBtnText, { color: '#FFFFFF' }]}>RETURN</Text>
-              </Pressable>
-            </View>
-          )}
-
-          {/* Paused → Resume + Return */}
-          {isPaused && (
+          {isOverdue ? (
             <View style={styles.twoColRow}>
               <Pressable
                 style={({ pressed }) => [styles.halfBtn, styles.halfBtnTeal, { opacity: pressed ? 0.85 : 1 }]}
-                onPress={() => onResume(booking)}
+                onPress={() => onRenew(booking)}
               >
-                <Ionicons name="play-outline" size={14} color={Colors.brandNavy} style={{ marginRight: 4 }} />
-                <Text style={[styles.halfBtnText, { color: Colors.brandNavy }]}>RESUME</Text>
+                <Ionicons name="refresh-outline" size={14} color={Colors.brandNavy} style={{ marginRight: 4 }} />
+                <Text style={[styles.halfBtnText, { color: Colors.brandNavy }]}>RENEW</Text>
               </Pressable>
               <Pressable
                 style={({ pressed }) => [styles.halfBtn, styles.halfBtnGreen, { opacity: pressed ? 0.85 : 1 }]}
@@ -250,16 +186,100 @@ export function RentalCard({ booking, onDispatch, onCollectCash, onPause, onResu
                 <Text style={[styles.halfBtnText, { color: '#FFFFFF' }]}>RETURN</Text>
               </Pressable>
             </View>
-          )}
+          ) : (
+            <>
+              {/* Asset pills — only show when booking is not a Draft (already active/paused) */}
+              {!isDraft && (
+                <View style={styles.assetPillRow}>
+                  <Pressable style={styles.assetPill} onPress={() => onSwap(booking)}>
+                    <Ionicons name="bicycle-outline" size={13} color={Colors.textSecondary} />
+                    <Text style={styles.assetPillText}>SWAP SCOOTER</Text>
+                  </Pressable>
+                  <Pressable style={styles.assetPill} onPress={() => onSwap(booking)}>
+                    <Ionicons name="battery-charging-outline" size={13} color={Colors.textSecondary} />
+                    <Text style={styles.assetPillText}>SWAP BATTERY</Text>
+                  </Pressable>
+                </View>
+              )}
 
-          {/* Collect cash — always */}
-          <Pressable
-            style={({ pressed }) => [styles.ghostBtn, { opacity: pressed ? 0.75 : 1 }]}
-            onPress={() => onCollectCash(booking)}
-          >
-            <Ionicons name="cash-outline" size={14} color={Colors.textSecondary} style={{ marginRight: 6 }} />
-            <Text style={styles.ghostBtnText}>COLLECT CASH</Text>
-          </Pressable>
+              {/* Draft → Dispatch */}
+              {isDraft && (
+                <Pressable
+                  style={({ pressed }) => [
+                    styles.primaryBtn,
+                    gate.isCleared ? styles.primaryBtnActive : styles.primaryBtnLocked,
+                    { opacity: pressed ? 0.85 : 1 },
+                  ]}
+                  onPress={() => onDispatch(booking)}
+                  disabled={!gate.isCleared}
+                >
+                  <Ionicons
+                    name={gate.isCleared ? 'rocket-outline' : 'lock-closed-outline'}
+                    size={15}
+                    color={gate.isCleared ? Colors.brandNavy : Colors.textMuted}
+                    style={{ marginRight: 7 }}
+                  />
+                  <View>
+                    <Text style={[styles.primaryBtnText, { color: gate.isCleared ? Colors.brandNavy : Colors.textMuted }]}>
+                      DISPATCH RIDE
+                    </Text>
+                    {!gate.isCleared && (
+                      <Text style={styles.gateLockHint}>Clear payment gate first</Text>
+                    )}
+                  </View>
+                </Pressable>
+              )}
+
+              {/* Active → Pause + Return */}
+              {isActive && (
+                <View style={styles.twoColRow}>
+                  <Pressable
+                    style={({ pressed }) => [styles.halfBtn, styles.halfBtnOrange, { opacity: pressed ? 0.85 : 1 }]}
+                    onPress={() => onPause(booking)}
+                  >
+                    <Ionicons name="pause-outline" size={14} color="#FFFFFF" style={{ marginRight: 4 }} />
+                    <Text style={[styles.halfBtnText, { color: '#FFFFFF' }]}>PAUSE</Text>
+                  </Pressable>
+                  <Pressable
+                    style={({ pressed }) => [styles.halfBtn, styles.halfBtnGreen, { opacity: pressed ? 0.85 : 1 }]}
+                    onPress={() => onReturn(booking)}
+                  >
+                    <Ionicons name="checkmark-circle-outline" size={14} color="#FFFFFF" style={{ marginRight: 4 }} />
+                    <Text style={[styles.halfBtnText, { color: '#FFFFFF' }]}>RETURN</Text>
+                  </Pressable>
+                </View>
+              )}
+
+              {/* Paused → Resume + Return */}
+              {isPaused && (
+                <View style={styles.twoColRow}>
+                  <Pressable
+                    style={({ pressed }) => [styles.halfBtn, styles.halfBtnTeal, { opacity: pressed ? 0.85 : 1 }]}
+                    onPress={() => onResume(booking)}
+                  >
+                    <Ionicons name="play-outline" size={14} color={Colors.brandNavy} style={{ marginRight: 4 }} />
+                    <Text style={[styles.halfBtnText, { color: Colors.brandNavy }]}>RESUME</Text>
+                  </Pressable>
+                  <Pressable
+                    style={({ pressed }) => [styles.halfBtn, styles.halfBtnGreen, { opacity: pressed ? 0.85 : 1 }]}
+                    onPress={() => onReturn(booking)}
+                  >
+                    <Ionicons name="checkmark-circle-outline" size={14} color="#FFFFFF" style={{ marginRight: 4 }} />
+                    <Text style={[styles.halfBtnText, { color: '#FFFFFF' }]}>RETURN</Text>
+                  </Pressable>
+                </View>
+              )}
+
+              {/* Collect cash — always */}
+              <Pressable
+                style={({ pressed }) => [styles.ghostBtn, { opacity: pressed ? 0.75 : 1 }]}
+                onPress={() => onCollectCash(booking)}
+              >
+                <Ionicons name="cash-outline" size={14} color={Colors.textSecondary} style={{ marginRight: 6 }} />
+                <Text style={styles.ghostBtnText}>COLLECT CASH</Text>
+              </Pressable>
+            </>
+          )}
         </View>
       )}
 

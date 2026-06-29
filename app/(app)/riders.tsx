@@ -138,9 +138,18 @@ export default function RidersScreen() {
                     </View>
                   )}
                   {booking && (
-                    <View style={styles.activeBadge}>
-                      <Text style={[Typography.badgeText, { color: Colors.statusActive, fontSize: 9 }]}>
-                        ACTIVE
+                    <View style={[
+                      styles.activeBadge,
+                      booking.status === 'Paused' && { backgroundColor: Colors.surfaceAmber }
+                    ]}>
+                      <Text style={[
+                        Typography.badgeText,
+                        {
+                          color: booking.status === 'Paused' ? Colors.statusWarning : Colors.statusActive,
+                          fontSize: 9,
+                        }
+                      ]}>
+                        {booking.status.toUpperCase()}
                       </Text>
                     </View>
                   )}
@@ -189,9 +198,15 @@ function RiderDetail({
         </View>
 
         {activeBooking && (
-          <View style={styles.activeBookingBar}>
-            <Text style={[Typography.badgeText, { color: Colors.statusActive }]}>
-              🟢 ACTIVE — {activeBooking.vehicle?.plate_number ?? 'No Vehicle'} · {activeBooking.rental_plan}
+          <View style={[
+            styles.activeBookingBar,
+            activeBooking.status === 'Paused' && {
+              backgroundColor: Colors.surfaceAmber,
+              borderLeftColor: Colors.statusWarning,
+            }
+          ]}>
+            <Text style={[Typography.badgeText, { color: activeBooking.status === 'Paused' ? Colors.statusWarning : Colors.statusActive }]}>
+              {activeBooking.status === 'Paused' ? '🟡 PAUSED' : '🟢 ACTIVE'} — {activeBooking.vehicle?.plate_number ?? 'No Vehicle'} · {activeBooking.rental_plan}
             </Text>
           </View>
         )}

@@ -47,31 +47,7 @@ export default function OverviewScreen() {
   };
 
   // ── Derived KPIs ─────────────────────────────────────────────────────────
-  const activeBookings = (bookings as BookingWithDetails[] | undefined)?.filter((b) => {
-    if (b.status !== 'Active') return false;
-    const gate = calculatePaymentGate(
-      b.rental_plan,
-      b.total_amount,
-      b.deposit_amount,
-      b.fines_amount,
-      b.amount_paid,
-      b.start_date,
-      b.end_date,
-      b.status,
-    );
-
-    const isOverdue = (() => {
-      const end = b.end_date ? parseLocalDate(b.end_date) : null;
-      if (!end) return false;
-      end.setHours(0, 0, 0, 0);
-      const today = new Date();
-      today.setHours(0, 0, 0, 0);
-      return end < today;
-    })();
-
-    const isOverdueAndUnpaid = (isOverdue || gate.isSecondPartOverdue) && !gate.isCleared;
-    return !isOverdueAndUnpaid;
-  }).length ?? 0;
+  const activeBookings = (bookings as BookingWithDetails[] | undefined)?.filter((b) => b.status === 'Active').length ?? 0;
 
   const totalRevenueRealised = (bookings as BookingWithDetails[] | undefined)?.reduce((sum, b) => {
     const amountPaid = b.amount_paid || 0;

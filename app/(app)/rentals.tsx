@@ -25,11 +25,12 @@ import { BookRideModal } from '../../src/components/modals/BookRideModal';
 import { PaymentModal } from '../../src/components/modals/PaymentModal';
 import { ChecklistModal } from '../../src/components/modals/ChecklistModal';
 import { PauseModal, ReturnModal, SwapModal } from '../../src/components/modals/OpsModals';
+import { RenewModal } from '../../src/components/modals/RenewModal';
 import { EmptyState, ErrorBanner, SearchBar, SkeletonCard } from '../../src/components/ui';
 import { useBatteries, useBookings, useCustomers, useGlobalConfig, useVehicles, queryKeys } from '../../src/hooks/useQueries';
 import { useAuthStore } from '../../src/stores/authStore';
 import { useStoreSelectionStore } from '../../src/stores/storeSelectionStore';
-import { dispatchBooking, calculatePaymentGate, parseLocalDate } from '../../src/services/bookingService';
+import { dispatchBooking } from '../../src/services/bookingService';
 import type { BookingStatus, BookingWithDetails } from '../../src/lib/database.types';
 
 type FilterStatus = 'All' | BookingStatus;
@@ -59,33 +60,10 @@ function HistorySummaryCard({ bookings }: { bookings: BookingWithDetails[] }) {
   };
 
   bookings.forEach((b) => {
-    const gate = calculatePaymentGate(
-      b.rental_plan,
-      b.total_amount,
-      b.deposit_amount,
-      b.fines_amount,
-      b.amount_paid,
-      b.start_date,
-      b.end_date,
-      b.status,
-    );
-
-    const isOverdue = (() => {
-      const end = b.end_date ? parseLocalDate(b.end_date) : null;
-      if (!end) return false;
-      end.setHours(0, 0, 0, 0);
-      const today = new Date();
-      today.setHours(0, 0, 0, 0);
-      return end < today;
-    })();
-
-    const isOverdueAndUnpaid = (isOverdue || gate.isSecondPartOverdue) && !gate.isCleared;
-    const effectiveStatus = (b.status === 'Active' && isOverdueAndUnpaid) ? 'Paused' : b.status;
-
-    if (effectiveStatus === 'Active') counts.Active++;
-    else if (effectiveStatus === 'Paused') counts.Paused++;
-    else if (effectiveStatus === 'Completed') counts.Completed++;
-    else if (effectiveStatus === 'Cancelled') counts.Cancelled++;
+    if (b.status === 'Active') counts.Active++;
+    else if (b.status === 'Paused') counts.Paused++;
+    else if (b.status === 'Completed') counts.Completed++;
+    else if (b.status === 'Cancelled') counts.Cancelled++;
   });
 
   return (
@@ -147,6 +125,7 @@ export default function RentalsScreen() {
   const [pauseTarget, setPauseTarget]     = useState<BookingWithDetails | null>(null);
   const [returnTarget, setReturnTarget]   = useState<BookingWithDetails | null>(null);
   const [swapTarget, setSwapTarget]       = useState<BookingWithDetails | null>(null);
+  const [renewTarget, setRenewTarget]     = useState<BookingWithDetails | null>(null);
   const [actionLoading, setActionLoading] = useState<string | null>(null);
 
   // ── Checklist gate state ─────────────────────────────────────────────────
@@ -183,31 +162,7 @@ export default function RentalsScreen() {
       : raw; // Master History = all statuses
 
     // Status chip filter
-    const byStatus = statusFilter === 'All' ? board : board.filter(b => {
-      const gate = calculatePaymentGate(
-        b.rental_plan,
-        b.total_amount,
-        b.deposit_amount,
-        b.fines_amount,
-        b.amount_paid,
-        b.start_date,
-        b.end_date,
-        b.status,
-      );
-
-      const isOverdue = (() => {
-        const end = b.end_date ? parseLocalDate(b.end_date) : null;
-        if (!end) return false;
-        end.setHours(0, 0, 0, 0);
-        const today = new Date();
-        today.setHours(0, 0, 0, 0);
-        return end < today;
-      })();
-
-      const isOverdueAndUnpaid = (isOverdue || gate.isSecondPartOverdue) && !gate.isCleared;
-      const effectiveStatus = (b.status === 'Active' && isOverdueAndUnpaid) ? 'Paused' : b.status;
-      return effectiveStatus === statusFilter;
-    });
+    const byStatus = statusFilter === 'All' ? board : board.filter(b => b.status === statusFilter);
 
     // Search filter
     const q = search.toLowerCase().trim();
@@ -464,6 +419,7 @@ export default function RentalsScreen() {
               onResume={handleResume}
               onReturn={handleReturnRequest}
               onSwap={setSwapTarget}
+              onRenew={setRenewTarget}
             />
           )}
         />
@@ -524,6 +480,17 @@ export default function RentalsScreen() {
         operatorId={operatorId}
         availableVehicles={availableVehicles}
         availableBatteries={availableBatteries}
+      />
+      <RenewModal
+        visible={!!renewTarget}
+        booking={renewTarget}
+        onClose={() => setRenewTarget(null)}
+        onSuccess={invalidate}
+        storeId={storeId ?? ''}
+        operatorId={operatorId}
+        availableVehicles={availableVehicles}
+        availableBatteries={availableBatteries}
+        globalConfig={globalConfig ?? null}
       />
     </SafeAreaView>
   );

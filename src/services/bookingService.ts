@@ -335,6 +335,129 @@ export async function completeBooking(
   if (batteryError) throw new Error(`Release battery failed: ${batteryError.message}`);
 }
 
+// ── Renew Booking (v1.9) ──────────────────────────────────────────────────────
+export interface RenewBookingParams {
+  oldBookingId: string;
+  oldVehicleId: string;
+  oldBatteryId: string;
+  newVehicleId: string;
+  newBatteryId: string;
+  newPlan: 'Weekly' | 'Monthly';
+  newRentAmount: number;
+  newDepositAmount: number;
+  cashAmountCollected: number;
+  onlineAmountCollected: number;
+  oldBookingBalance: number;
+  customerId: string;
+  operatorId: string;
+  storeId: string;
+  startDate: string;
+  endDate: string;
+  hasIssues?: boolean;
+}
+
+export async function renewBooking(params: RenewBookingParams): Promise<string> {
+  const totalCollected = params.cashAmountCollected + params.onlineAmountCollected;
+  const paymentToOldBooking = Math.min(params.oldBookingBalance, totalCollected);
+  const paymentToNewBooking = Math.max(0, totalCollected - paymentToOldBooking);
+
+  // Pro-rate payment to old booking cash/online splits
+  let oldCash = 0;
+  let oldOnline = 0;
+  if (paymentToOldBooking > 0 && totalCollected > 0) {
+    const ratio = paymentToOldBooking / totalCollected;
+    oldCash = Math.round(params.cashAmountCollected * ratio * 100) / 100;
+    oldOnline = Math.round(params.onlineAmountCollected * ratio * 100) / 100;
+  }
+
+  // Record payment on old booking if outstanding dues
+  if (paymentToOldBooking > 0) {
+    const { error: paymentError } = await supabase.rpc('record_payment', {
+      p_booking_id: params.oldBookingId,
+      p_store_id: params.storeId,
+      p_cash_amount: oldCash,
+      p_online_amount: oldOnline,
+      p_operator_id: params.operatorId,
+    });
+    if (paymentError) throw new Error(`Failed to clear old booking dues: ${paymentError.message}`);
+  }
+
+  // Update old booking to Completed
+  const { error: oldBookingCompleteError } = await supabase
+    .from('bookings')
+    .update({
+      status: 'Completed',
+      completed_at: new Date().toISOString(),
+    })
+    .eq('id', params.oldBookingId);
+  if (oldBookingCompleteError) {
+    throw new Error(`Failed to complete old booking: ${oldBookingCompleteError.message}`);
+  }
+
+  // Release old assets if swapped
+  const isVehicleSwapped = params.oldVehicleId !== params.newVehicleId;
+  const isBatterySwapped = params.oldBatteryId !== params.newBatteryId;
+
+  if (isVehicleSwapped) {
+    const finalVehicleStatus = params.hasIssues ? 'Maintenance' : 'Available';
+    const { error: vehicleError } = await supabase
+      .from('vehicles')
+      .update({ status: finalVehicleStatus, assigned_battery_id: null })
+      .eq('id', params.oldVehicleId);
+    if (vehicleError) throw new Error(`Release old vehicle failed: ${vehicleError.message}`);
+  }
+
+  if (isBatterySwapped) {
+    const { error: batteryError } = await supabase
+      .from('batteries')
+      .update({ status: 'Available', assigned_vehicle_id: null })
+      .eq('id', params.oldBatteryId);
+    if (batteryError) throw new Error(`Release old battery failed: ${batteryError.message}`);
+  }
+
+  // Create new booking via RPC
+  const { data: newBookingId, error: createError } = await supabase.rpc('create_booking', {
+    p_customer_id: params.customerId,
+    p_vehicle_id: params.newVehicleId,
+    p_battery_id: params.newBatteryId,
+    p_store_id: params.storeId,
+    p_rental_plan: params.newPlan,
+    p_total_amount: params.newRentAmount,
+    p_deposit_amount: params.newDepositAmount,
+    p_amount_paid: 0, // set manually below with deposit carryover
+    p_operator_id: params.operatorId,
+  });
+
+  if (createError || !newBookingId) {
+    throw new Error(`Create renewed booking failed: ${createError?.message ?? 'Unknown error'}`);
+  }
+
+  // Splits for new booking
+  const newCash = Math.max(0, params.cashAmountCollected - oldCash);
+  const newOnline = Math.max(0, params.onlineAmountCollected - oldOnline);
+
+  // Update new booking dates & payment details (security deposit transfers over)
+  const { error: updateError } = await supabase
+    .from('bookings')
+    .update({
+      start_date: params.startDate,
+      end_date: params.endDate,
+      started_at: new Date().toISOString(),
+      status: 'Active',
+      amount_paid: params.newDepositAmount + paymentToNewBooking,
+      amount_paid_cash: newCash,
+      amount_paid_online: newOnline,
+    })
+    .eq('id', newBookingId);
+
+  if (updateError) {
+    throw new Error(`Failed to initialize renewed booking details: ${updateError.message}`);
+  }
+
+  return newBookingId;
+}
+
+
 // ── Dispatch booking (Draft → Active) ─────────────────────────────────────────
 export async function dispatchBooking(
   bookingId: string,
