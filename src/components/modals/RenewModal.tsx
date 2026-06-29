@@ -21,6 +21,7 @@ import { Colors, Radius, Spacing, Typography } from '../../constants/design';
 import type { Battery, BookingWithDetails, GlobalConfig, Vehicle } from '../../lib/database.types';
 import {
   calculateOverdueFines,
+  calculatePaymentGate,
   calculatePricing,
   formatCurrency,
   formatLocalDate,
@@ -130,11 +131,29 @@ export function RenewModal({
   const oldOutstanding = oldBookingDues.balanceDue;
   const totalToCollect = newRent + oldOutstanding;
 
+  // Next subscription gate amount (how much more cash we need to collect for the new booking to clear the gate)
+  const newBookingGate = useMemo(() => {
+    if (!pricing) return 0;
+    const gate = calculatePaymentGate(
+      plan,
+      newRent,
+      pricing.securityDeposit,
+      0, // fines_amount
+      pricing.securityDeposit, // amount_paid (deposit transfers over)
+      startDate,
+      endDate,
+      'Active'
+    );
+    return Math.max(0, gate.gateAmount - pricing.securityDeposit);
+  }, [plan, newRent, pricing, startDate, endDate]);
+
+  const minPaymentRequired = oldOutstanding + newBookingGate;
+
   const cashParsed = parseFloat(cashAmount) || 0;
   const onlineParsed = parseFloat(onlineAmount) || 0;
   const totalEntered = cashParsed + onlineParsed;
 
-  const hasEnteredMinPayment = totalEntered >= oldOutstanding;
+  const hasEnteredMinPayment = totalEntered >= minPaymentRequired;
 
   const handleChecklistComplete = (hasIssues: boolean, totalDamageFines: number) => {
     setChecklistHasIssues(hasIssues);
@@ -168,7 +187,7 @@ export function RenewModal({
   const handleSubmit = async () => {
     if (!booking || !pricing) return;
     if (!hasEnteredMinPayment) {
-      setError(`Must collect at least ${formatCurrency(oldOutstanding)} to clear old backlog and fines.`);
+      setError(`Must collect at least ${formatCurrency(minPaymentRequired)} to clear old backlog and next subscription gate.`);
       return;
     }
 
@@ -358,7 +377,7 @@ export function RenewModal({
             </View>
             <View style={{ alignItems: 'flex-end', justifyContent: 'center' }}>
               <Text style={styles.minRequiredText}>
-                Min: {formatCurrency(oldOutstanding)}
+                Min: {formatCurrency(minPaymentRequired)}
               </Text>
               <Ionicons
                 name={paymentExpanded ? 'chevron-up' : 'chevron-down'}
@@ -415,11 +434,11 @@ export function RenewModal({
                   <Text style={styles.enteredText}>Total Payment Entered: {formatCurrency(totalEntered)}</Text>
                   {totalEntered >= totalToCollect ? (
                     <Text style={[styles.statusText, { color: Colors.statusActive }]}>✓ Full Payment</Text>
-                  ) : totalEntered >= oldOutstanding ? (
-                    <Text style={[styles.statusText, { color: Colors.statusWarning }]}>✓ Backlog Cleared</Text>
+                  ) : totalEntered >= minPaymentRequired ? (
+                    <Text style={[styles.statusText, { color: Colors.statusActive }]}>✓ Gate Cleared</Text>
                   ) : (
                     <Text style={[styles.statusText, { color: Colors.statusError }]}>
-                      ⚠ Need {formatCurrency(oldOutstanding - totalEntered)} more
+                      ⚠ Need {formatCurrency(minPaymentRequired - totalEntered)} more
                     </Text>
                   )}
                 </View>
