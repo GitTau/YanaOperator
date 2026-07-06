@@ -258,8 +258,48 @@ export async function createBooking(
 
 // ── record_payment RPC ────────────────────────────────────────────────────────
 export async function recordPayment(params: RecordPaymentParams): Promise<void> {
+  // Fetch booking before payment
+  const { data: bookingBefore } = await supabase
+    .from('bookings')
+    .select('status, paused_at, end_date')
+    .eq('id', params.p_booking_id)
+    .single();
+
   const { error } = await supabase.rpc('record_payment', params);
   if (error) throw new Error(`Record payment failed: ${error.message}`);
+
+  // Fetch booking after payment to see if it was auto-unpaused (Active)
+  if (bookingBefore && bookingBefore.status === 'Paused') {
+    const { data: bookingAfter } = await supabase
+      .from('bookings')
+      .select('status')
+      .eq('id', params.p_booking_id)
+      .single();
+
+    if (bookingAfter && bookingAfter.status === 'Active' && bookingBefore.paused_at && bookingBefore.end_date) {
+      const pauseStart = new Date(bookingBefore.paused_at);
+      const now = new Date();
+      const pauseStartDate = new Date(pauseStart.getFullYear(), pauseStart.getMonth(), pauseStart.getDate());
+      const todayDate = new Date(now.getFullYear(), now.getMonth(), now.getDate());
+      const diffTime = todayDate.getTime() - pauseStartDate.getTime();
+      const diffDays = Math.max(0, Math.floor(diffTime / (1000 * 60 * 60 * 24)));
+
+      if (diffDays > 0) {
+        const currentEnd = parseLocalDate(bookingBefore.end_date);
+        if (currentEnd) {
+          currentEnd.setDate(currentEnd.getDate() + diffDays);
+          const newEndDateStr = formatLocalDate(currentEnd);
+          const { error: updateError } = await supabase
+            .from('bookings')
+            .update({ end_date: newEndDateStr })
+            .eq('id', params.p_booking_id);
+          if (updateError) {
+            console.error('[recordPayment] Failed to shift end_date on auto-unpause:', updateError.message);
+          }
+        }
+      }
+    }
+  }
 }
 
 // ── swap_assets RPC ───────────────────────────────────────────────────────────
@@ -464,12 +504,45 @@ export async function dispatchBooking(
   vehicleId: string,
   batteryId: string,
 ): Promise<void> {
+  // Fetch current booking state to see if it is a Resume from Pause
+  const { data: booking, error: fetchError } = await supabase
+    .from('bookings')
+    .select('status, paused_at, end_date')
+    .eq('id', bookingId)
+    .single();
+
+  if (fetchError) {
+    throw new Error(`Failed to fetch booking details before dispatch: ${fetchError.message}`);
+  }
+
+  const now = new Date();
+  const updatedFields: Record<string, any> = {
+    status: 'Active',
+    started_at: now.toISOString(),
+  };
+
+  // If unpausing, calculate the pause duration in calendar days and shift end_date forward
+  if (booking && booking.status === 'Paused' && booking.paused_at) {
+    const pauseStart = new Date(booking.paused_at);
+    const pauseStartDate = new Date(pauseStart.getFullYear(), pauseStart.getMonth(), pauseStart.getDate());
+    const todayDate = new Date(now.getFullYear(), now.getMonth(), now.getDate());
+    const diffTime = todayDate.getTime() - pauseStartDate.getTime();
+    const diffDays = Math.max(0, Math.floor(diffTime / (1000 * 60 * 60 * 24)));
+
+    updatedFields.paused_at = null; // Clear pause timestamp
+
+    if (diffDays > 0 && booking.end_date) {
+      const currentEnd = parseLocalDate(booking.end_date);
+      if (currentEnd) {
+        currentEnd.setDate(currentEnd.getDate() + diffDays);
+        updatedFields.end_date = formatLocalDate(currentEnd);
+      }
+    }
+  }
+
   const { error } = await supabase
     .from('bookings')
-    .update({
-      status: 'Active',
-      started_at: new Date().toISOString(),
-    })
+    .update(updatedFields)
     .eq('id', bookingId);
   if (error) throw new Error(`Dispatch failed: ${error.message}`);
 

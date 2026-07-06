@@ -202,11 +202,9 @@ export default function RentalsScreen() {
     }
   };
 
-  // Pause requires checklist first (AGENTS.md business rule)
+  // Pause directly opens PauseModal (checklist is only for return/renew)
   const handlePauseRequest = (booking: BookingWithDetails) => {
-    setChecklistBooking(booking);
-    setChecklistType('pause');
-    setShowChecklist(true);
+    setPauseTarget(booking);
   };
 
   // Return requires checklist first (AGENTS.md business rule)
