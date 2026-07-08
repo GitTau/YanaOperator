@@ -472,9 +472,25 @@ export async function renewBooking(params: RenewBookingParams): Promise<string> 
     throw new Error(`Create renewed booking failed: ${createError?.message ?? 'Unknown error'}`);
   }
 
-  // Splits for new booking
-  const newCash = Math.max(0, params.cashAmountCollected - oldCash);
-  const newOnline = Math.max(0, params.onlineAmountCollected - oldOnline);
+  // Fetch old booking to check how the deposit was originally paid (cash vs online)
+  const { data: oldBooking } = await supabase
+    .from('bookings')
+    .select('amount_paid_cash, amount_paid_online')
+    .eq('id', params.oldBookingId)
+    .single();
+
+  const oldBookingPaidCash = oldBooking?.amount_paid_cash ?? 0;
+  const wasDepositPaidCash = oldBookingPaidCash >= params.newDepositAmount;
+
+  // Splits for new booking (incorporating the carried-over security deposit)
+  let newCash = Math.max(0, params.cashAmountCollected - oldCash);
+  let newOnline = Math.max(0, params.onlineAmountCollected - oldOnline);
+
+  if (wasDepositPaidCash) {
+    newCash += params.newDepositAmount;
+  } else {
+    newOnline += params.newDepositAmount;
+  }
 
   // Update new booking dates & payment details (security deposit transfers over)
   const { error: updateError } = await supabase
