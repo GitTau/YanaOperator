@@ -8,7 +8,7 @@
 import { Ionicons } from '@expo/vector-icons';
 import * as Updates from 'expo-updates';
 import { router } from 'expo-router';
-import React, { useRef, useState } from 'react';
+import React, { useEffect, useRef, useState } from 'react';
 import {
   Animated,
   Modal,
@@ -26,6 +26,8 @@ interface YanaHeaderProps {
   storeName?: string;
   role?: string;
   onSignOut?: () => void;
+  /** True after 10 PM IST — EOD button glows green */
+  isEodTime?: boolean;
 }
 
 type MenuItemDef = {
@@ -43,10 +45,24 @@ const MENU_ITEMS: MenuItemDef[] = [
   { id: 'signout',     label: 'Sign Out',      icon: 'log-out-outline' },
 ];
 
-export function YanaHeader({ storeName, role, onSignOut }: YanaHeaderProps) {
+export function YanaHeader({ storeName, role, onSignOut, isEodTime = false }: YanaHeaderProps) {
   const insets = useSafeAreaInsets();
   const [menuOpen, setMenuOpen] = useState(false);
   const fadeAnim = useRef(new Animated.Value(0)).current;
+  // Pulsing glow animation for EOD button
+  const pulseAnim = useRef(new Animated.Value(1)).current;
+
+  useEffect(() => {
+    if (!isEodTime) return;
+    const loop = Animated.loop(
+      Animated.sequence([
+        Animated.timing(pulseAnim, { toValue: 1.12, duration: 700, useNativeDriver: true }),
+        Animated.timing(pulseAnim, { toValue: 1.0,  duration: 700, useNativeDriver: true }),
+      ])
+    );
+    loop.start();
+    return () => loop.stop();
+  }, [isEodTime, pulseAnim]);
 
   const openMenu = () => {
     setMenuOpen(true);
@@ -84,13 +100,37 @@ export function YanaHeader({ storeName, role, onSignOut }: YanaHeaderProps) {
           )}
         </View>
 
-        {/* Right: role badge + hamburger */}
+        {/* Right: role badge + EOD button + hamburger + sign out */}
         <View style={styles.right}>
           {role && (
             <View style={styles.roleBadge}>
               <Text style={styles.roleText}>{role}</Text>
             </View>
           )}
+
+          {/* EOD / Operator button */}
+          <Animated.View style={{ transform: [{ scale: isEodTime ? pulseAnim : 1 }] }}>
+            <Pressable
+              onPress={() => router.push('/(app)/eod' as Parameters<typeof router.push>[0])}
+              style={({ pressed }) => [
+                styles.eodBtn,
+                isEodTime && styles.eodBtnActive,
+                { opacity: pressed ? 0.8 : 1 },
+              ]}
+              accessibilityLabel={isEodTime ? 'View EOD Report — ready for download' : 'View EOD Report'}
+              accessibilityRole="button"
+            >
+              <Ionicons
+                name={isEodTime ? 'document-text' : 'document-text-outline'}
+                size={12}
+                color={isEodTime ? '#fff' : Colors.textSecondary}
+                style={{ marginRight: 4 }}
+              />
+              <Text style={[styles.eodBtnText, isEodTime && styles.eodBtnTextActive]}>
+                {isEodTime ? 'EOD ●' : 'Operator'}
+              </Text>
+            </Pressable>
+          </Animated.View>
 
           {/* Hamburger menu button */}
           <Pressable
@@ -216,6 +256,37 @@ const styles = StyleSheet.create({
     ...Typography.badgeText,
     color: Colors.textSecondary,
   },
+
+  // ── EOD Button ─────────────────────────────────────────────────────────────
+  eodBtn: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    paddingHorizontal: 9,
+    paddingVertical: 5,
+    borderRadius: 8,
+    borderWidth: 1,
+    borderColor: Colors.borderLight,
+    backgroundColor: Colors.bgApp,
+  },
+  eodBtnActive: {
+    backgroundColor: Colors.statusActive,
+    borderColor: Colors.statusActive,
+    shadowColor: Colors.statusActive,
+    shadowOffset: { width: 0, height: 0 },
+    shadowOpacity: 0.6,
+    shadowRadius: 8,
+    elevation: 4,
+  },
+  eodBtnText: {
+    fontSize: 10,
+    fontWeight: '700',
+    color: Colors.textSecondary,
+    letterSpacing: 0.2,
+  },
+  eodBtnTextActive: {
+    color: '#fff',
+  },
+
   iconBtn: {
     paddingHorizontal: 4,
     paddingVertical: 4,

@@ -18,6 +18,7 @@ import { Colors, Radius, Spacing, Typography } from '../../src/constants/design'
 import { YanaHeader } from '../../src/components/YanaHeader';
 import { useAuthStore } from '../../src/stores/authStore';
 import { useStoreSelectionStore } from '../../src/stores/storeSelectionStore';
+import { useIsEodTime } from '../../src/hooks/useQueries';
 
 type IoniconName = React.ComponentProps<typeof Ionicons>['name'];
 
@@ -68,6 +69,7 @@ export default function AppLayout() {
   const insets = useSafeAreaInsets();
   const { signOut, profile } = useAuthStore();
   const { selectedStore, clearStore } = useStoreSelectionStore();
+  const isEodTime = useIsEodTime();
 
   const handleSignOut = async () => {
     await clearStore();
@@ -81,6 +83,7 @@ export default function AppLayout() {
         storeName={selectedStore?.name}
         role={profile?.role}
         onSignOut={handleSignOut}
+        isEodTime={isEodTime}
       />
       <Tabs
         screenOptions={{ headerShown: false }}
@@ -118,6 +121,8 @@ export default function AppLayout() {
         <Tabs.Screen name="riders"      />
         {/* maintenance — hidden from tab bar, accessed via hamburger menu */}
         <Tabs.Screen name="maintenance" options={{ href: null }} />
+        {/* eod — hidden from tab bar, accessed via Operator button in header */}
+        <Tabs.Screen name="eod"         options={{ href: null }} />
       </Tabs>
     </View>
   );

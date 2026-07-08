@@ -4,6 +4,7 @@
 // Polling: 30s refetch interval matches polling architecture in ARCHITECTURE_OPS.md
 // ─────────────────────────────────────────────────────────────────────────────
 
+import React from 'react';
 import { useQuery } from '@tanstack/react-query';
 import { supabase } from '../lib/supabase';
 
@@ -254,4 +255,56 @@ export function useOpenMaintenanceTickets(storeId: string | null) {
     },
   });
 }
+// ── EOD Helpers ───────────────────────────────────────────────────────────────
 
+/**
+ * Returns true when the current IST time is at or past 22:00 (10 PM).
+ * Re-evaluated every minute so the header button glows automatically.
+ */
+export function useIsEodTime(): boolean {
+  const [isEod, setIsEod] = React.useState(() => {
+    const nowIst = new Date(Date.now() + 5.5 * 60 * 60 * 1000);
+    return nowIst.getUTCHours() >= 22;
+  });
+
+  React.useEffect(() => {
+    const check = () => {
+      const nowIst = new Date(Date.now() + 5.5 * 60 * 60 * 1000);
+      setIsEod(nowIst.getUTCHours() >= 22);
+    };
+    const id = setInterval(check, 60_000); // check every minute
+    return () => clearInterval(id);
+  }, []);
+
+  return isEod;
+}
+
+// ── EOD Report types (computed client-side from cached query data) ─────────────
+
+export interface EodActiveRental {
+  bookingId: string;
+  riderName: string;
+  vehicleNumber: string;
+  rentalPlan: string;
+  startDate: string | null;
+  endDate: string | null;
+  daysRemaining: number | null;
+  totalRentCollected: number;
+  cashCollected: number;
+  onlineCollected: number;
+  pendingAmount: number;
+  pendingDueDate: string | null;
+  status: string;
+}
+
+export interface EodKpis {
+  totalActiveRentals: number;
+  totalRevenueCollectedToday: number;
+  totalRenewalsToday: number;
+  totalNewBookingsToday: number;
+  totalCashReceivedToday: number;
+  totalRidersOnPause: number;
+  totalIdleScooters: number;
+  totalUnderMaintenanceToday: number;
+  totalReturnsToday: number;
+}
