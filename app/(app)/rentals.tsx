@@ -204,6 +204,11 @@ export default function RentalsScreen() {
     }
   };
 
+  // Pause directly opens PauseModal (no checklist — checklist only for return/vehicle_swap)
+  const handlePauseRequest = (booking: BookingWithDetails) => {
+    setPauseTarget(booking);
+  };
+
   // Swap — vehicle swap gates through checklist first; battery swap goes direct
   const handleSwapRequest = (booking: BookingWithDetails, type: 'vehicle' | 'battery') => {
     setSwapType(type);
