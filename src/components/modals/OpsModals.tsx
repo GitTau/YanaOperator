@@ -1,5 +1,6 @@
 // PauseModal, SwapModal, ReturnModal, CustomerFormModal
 
+import { Ionicons } from '@expo/vector-icons';
 import React, { useState } from 'react';
 import {
   KeyboardAvoidingView,
@@ -257,9 +258,13 @@ interface SwapModalProps {
   operatorId: string;
   availableVehicles: Vehicle[];
   availableBatteries: Battery[];
+  /** Whether the captain is swapping a vehicle or a battery */
+  swapType: 'vehicle' | 'battery';
+  /** True if checklist found issues on the vehicle being swapped out */
+  hasVehicleIssues?: boolean;
 }
 
-export function SwapModal({ visible, booking, onClose, onSuccess, storeId, operatorId, availableVehicles, availableBatteries }: SwapModalProps) {
+export function SwapModal({ visible, booking, onClose, onSuccess, storeId, operatorId, availableVehicles, availableBatteries, swapType, hasVehicleIssues = false }: SwapModalProps) {
   const [newVehicle, setNewVehicle] = useState<Vehicle | null>(null);
   const [newBattery, setNewBattery] = useState<Battery | null>(null);
   const [fines, setFines] = useState('');
@@ -268,7 +273,8 @@ export function SwapModal({ visible, booking, onClose, onSuccess, storeId, opera
 
   const handleSwap = async () => {
     if (!booking) return;
-    if (!newVehicle && !newBattery) { setError('Select at least a new vehicle or battery'); return; }
+    if (swapType === 'vehicle' && !newVehicle) { setError('Select a replacement scooter'); return; }
+    if (swapType === 'battery' && !newBattery) { setError('Select a replacement battery'); return; }
     setLoading(true);
     setError(null);
     try {
@@ -292,31 +298,68 @@ export function SwapModal({ visible, booking, onClose, onSuccess, storeId, opera
   const handleClose = () => { setNewVehicle(null); setNewBattery(null); setFines(''); setError(null); onClose(); };
   if (!booking) return null;
 
+  const title = swapType === 'vehicle' ? 'Swap Scooter' : 'Swap Battery';
+  const confirmLabel = swapType === 'vehicle' ? 'Confirm Scooter Swap' : 'Confirm Battery Swap';
+
   return (
     <Modal visible={visible} animationType="slide" presentationStyle="pageSheet" onRequestClose={handleClose}>
       <ScrollView style={styles.container} contentContainerStyle={{ paddingBottom: 100 }}>
         <View style={styles.handle} />
         <View style={styles.content}>
           <View style={styles.titleRow}>
-            <Text style={[Typography.h1Screen, { color: Colors.textPrimary }]}>Swap Assets</Text>
+            <Text style={[Typography.h1Screen, { color: Colors.textPrimary }]}>{title}</Text>
             <Pressable onPress={handleClose} hitSlop={12}><Text style={styles.closeBtn}>✕</Text></Pressable>
           </View>
 
-          <Text style={styles.currentAssets}>Current: {booking.vehicle?.plate_number ?? 'No Vehicle'} / {booking.battery?.serial_number ?? 'No Battery'}</Text>
+          <Text style={styles.currentAssets}>
+            Current: {booking.vehicle?.plate_number ?? 'No Vehicle'} / {booking.battery?.serial_number ?? 'No Battery'}
+          </Text>
 
-          <Text style={[Typography.labelCaps, styles.fieldLabel]}>NEW SCOOTER (optional)</Text>
-          {availableVehicles.map((v) => (
-            <Pressable key={v.id} style={[styles.listItem, newVehicle?.id === v.id && styles.listItemSelected]} onPress={() => setNewVehicle(v === newVehicle ? null : v)}>
-              <Text style={[styles.listItemText, newVehicle?.id === v.id && { color: Colors.brandCyan }]}>🛵 {v.plate_number}</Text>
-            </Pressable>
-          ))}
+          {hasVehicleIssues && swapType === 'vehicle' && (
+            <View style={[styles.warningBox, { borderLeftColor: Colors.statusWarning }]}>
+              <Text style={[styles.warningText, { color: Colors.statusWarning }]}>
+                ⚠ Checklist flagged issues on this vehicle. It will be sent to Maintenance after swap.
+              </Text>
+            </View>
+          )}
 
-          <Text style={[Typography.labelCaps, styles.fieldLabel]}>NEW BATTERY (optional)</Text>
-          {availableBatteries.map((b) => (
-            <Pressable key={b.id} style={[styles.listItem, newBattery?.id === b.id && styles.listItemSelected]} onPress={() => setNewBattery(b === newBattery ? null : b)}>
-              <Text style={[styles.listItemText, newBattery?.id === b.id && { color: Colors.brandCyan }]}>⚡ {b.serial_number}</Text>
-            </Pressable>
-          ))}
+          {swapType === 'vehicle' && (
+            <>
+              <Text style={[Typography.labelCaps, styles.fieldLabel]}>SELECT REPLACEMENT SCOOTER</Text>
+              {availableVehicles.length === 0 && (
+                <Text style={[Typography.bodySecondary, { color: Colors.textMuted, marginBottom: Spacing.sm }]}>No available scooters at this ZAP Point.</Text>
+              )}
+              {availableVehicles.map((v) => (
+                <Pressable
+                  key={v.id}
+                  style={[styles.listItem, newVehicle?.id === v.id && styles.listItemSelected]}
+                  onPress={() => setNewVehicle(newVehicle?.id === v.id ? null : v)}
+                >
+                  <Ionicons name="bicycle-outline" size={15} color={newVehicle?.id === v.id ? Colors.brandCyan : Colors.textSecondary} style={{ marginRight: 8 }} />
+                  <Text style={[styles.listItemText, newVehicle?.id === v.id && { color: Colors.brandCyan }]}>{v.plate_number}</Text>
+                </Pressable>
+              ))}
+            </>
+          )}
+
+          {swapType === 'battery' && (
+            <>
+              <Text style={[Typography.labelCaps, styles.fieldLabel]}>SELECT REPLACEMENT BATTERY</Text>
+              {availableBatteries.length === 0 && (
+                <Text style={[Typography.bodySecondary, { color: Colors.textMuted, marginBottom: Spacing.sm }]}>No available batteries at this ZAP Point.</Text>
+              )}
+              {availableBatteries.map((b) => (
+                <Pressable
+                  key={b.id}
+                  style={[styles.listItem, newBattery?.id === b.id && styles.listItemSelected]}
+                  onPress={() => setNewBattery(newBattery?.id === b.id ? null : b)}
+                >
+                  <Ionicons name="battery-charging-outline" size={15} color={newBattery?.id === b.id ? Colors.brandCyan : Colors.textSecondary} style={{ marginRight: 8 }} />
+                  <Text style={[styles.listItemText, newBattery?.id === b.id && { color: Colors.brandCyan }]}>{b.serial_number}</Text>
+                </Pressable>
+              ))}
+            </>
+          )}
 
           <Text style={[Typography.labelCaps, styles.fieldLabel]}>ADDITIONAL FINE (₹) — optional</Text>
           <TextInput style={styles.amountInput} value={fines} onChangeText={(t) => { setFines(t); setError(null); }} keyboardType="numeric" placeholder="0" placeholderTextColor={Colors.textSecondary} />
@@ -326,7 +369,7 @@ export function SwapModal({ visible, booking, onClose, onSuccess, storeId, opera
       </ScrollView>
       <View style={styles.actionBar}>
         <YanaButton label="Cancel" variant="ghost" onPress={handleClose} style={{ flex: 1 }} />
-        <YanaButton label="Confirm Swap" variant="primary" loading={loading} onPress={handleSwap} style={{ flex: 2 }} />
+        <YanaButton label={confirmLabel} variant="primary" loading={loading} onPress={handleSwap} style={{ flex: 2 }} />
       </View>
     </Modal>
   );

@@ -8,6 +8,7 @@
 import { useQueryClient } from '@tanstack/react-query';
 import React, { useMemo, useState } from 'react';
 import {
+  Alert,
   FlatList,
   LayoutAnimation,
   Pressable,
@@ -125,13 +126,14 @@ export default function RentalsScreen() {
   const [pauseTarget, setPauseTarget]     = useState<BookingWithDetails | null>(null);
   const [returnTarget, setReturnTarget]   = useState<BookingWithDetails | null>(null);
   const [swapTarget, setSwapTarget]       = useState<BookingWithDetails | null>(null);
+  const [swapType, setSwapType]           = useState<'vehicle' | 'battery'>('vehicle');
   const [renewTarget, setRenewTarget]     = useState<BookingWithDetails | null>(null);
   const [actionLoading, setActionLoading] = useState<string | null>(null);
 
   // ── Checklist gate state ─────────────────────────────────────────────────
   // Checklist must be completed before pause/return can proceed
   const [checklistBooking, setChecklistBooking] = useState<BookingWithDetails | null>(null);
-  const [checklistType, setChecklistType]       = useState<'return' | 'pause'>('return');
+  const [checklistType, setChecklistType]       = useState<'return' | 'pause' | 'vehicle_swap'>('return');
   const [showChecklist, setShowChecklist]       = useState(false);
   // Damage fines from checklist — forwarded to ReturnModal for deposit calc
   const [checklistFines, setChecklistFines]     = useState(0);
@@ -183,7 +185,7 @@ export default function RentalsScreen() {
       await dispatchBooking(booking.id, booking.vehicle_id, booking.battery_id);
       invalidate();
     } catch (e) {
-      console.error('[Rentals] dispatch failed:', e);
+      Alert.alert('Dispatch Failed', e instanceof Error ? e.message : 'Could not dispatch ride. Please try again.');
     } finally {
       setActionLoading(null);
     }
@@ -196,15 +198,24 @@ export default function RentalsScreen() {
       await dispatchBooking(booking.id, booking.vehicle_id, booking.battery_id);
       invalidate();
     } catch (e) {
-      console.error('[Rentals] resume failed:', e);
+      Alert.alert('Resume Failed', e instanceof Error ? e.message : 'Could not resume booking. Please try again.');
     } finally {
       setActionLoading(null);
     }
   };
 
-  // Pause directly opens PauseModal (checklist is only for return/renew)
-  const handlePauseRequest = (booking: BookingWithDetails) => {
-    setPauseTarget(booking);
+  // Swap — vehicle swap gates through checklist first; battery swap goes direct
+  const handleSwapRequest = (booking: BookingWithDetails, type: 'vehicle' | 'battery') => {
+    setSwapType(type);
+    if (type === 'vehicle') {
+      // Must inspect the current vehicle before swapping it out (business rule)
+      setChecklistBooking(booking);
+      setChecklistType('vehicle_swap');
+      setShowChecklist(true);
+    } else {
+      // Battery swap — no checklist needed, go direct to swap modal
+      setSwapTarget(booking);
+    }
   };
 
   // Return requires checklist first (AGENTS.md business rule)
@@ -214,13 +225,16 @@ export default function RentalsScreen() {
     setShowChecklist(true);
   };
 
-  // Checklist completed → proceed to actual pause/return modal
+  // Checklist completed → proceed to actual pause/return/swap-vehicle modal
   // totalDamageFines flows from ChecklistModal → ReturnModal for deposit deduction display
   const handleChecklistComplete = (hasIssues: boolean, totalDamageFines: number) => {
     setShowChecklist(false);
     setChecklistFines(totalDamageFines);
     setChecklistHasIssues(hasIssues);
-    if (checklistType === 'pause') {
+    if (checklistType === 'vehicle_swap') {
+      // Checklist done — now open the swap modal for vehicle selection
+      setSwapTarget(checklistBooking);
+    } else if (checklistType === 'pause') {
       setPauseTarget(checklistBooking);
     } else {
       setReturnTarget(checklistBooking);
@@ -416,7 +430,7 @@ export default function RentalsScreen() {
               onPause={handlePauseRequest}
               onResume={handleResume}
               onReturn={handleReturnRequest}
-              onSwap={setSwapTarget}
+              onSwap={handleSwapRequest}
               onRenew={setRenewTarget}
             />
           )}
@@ -472,7 +486,9 @@ export default function RentalsScreen() {
       <SwapModal
         visible={!!swapTarget}
         booking={swapTarget}
-        onClose={() => setSwapTarget(null)}
+        swapType={swapType}
+        hasVehicleIssues={swapType === 'vehicle' ? checklistHasIssues : false}
+        onClose={() => { setSwapTarget(null); setChecklistHasIssues(false); }}
         onSuccess={invalidate}
         storeId={storeId ?? ''}
         operatorId={operatorId}

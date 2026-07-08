@@ -68,7 +68,7 @@ export function useBatteries(storeId: string | null) {
         .eq('store_id', storeId as string)
         .order('serial_number');
       if (error) throw new Error(error.message);
-      return data;
+      return data ?? [];
     },
   });
 }
@@ -86,7 +86,7 @@ export function useCustomers(storeId: string | null) {
         .eq('store_id', storeId as string)
         .order('name');
       if (error) throw new Error(error.message);
-      return data;
+      return data ?? [];
     },
   });
 }
@@ -109,7 +109,7 @@ export function useBookings(storeId: string | null) {
         .eq('store_id', storeId as string)
         .order('created_at', { ascending: false });
       if (error) throw new Error(error.message);
-      return data;
+      return data ?? [];
     },
   });
 }

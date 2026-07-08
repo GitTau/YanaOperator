@@ -23,7 +23,7 @@ import { EmptyState, SkeletonCard } from '../../src/components/ui';
 
 export default function StoreSelectScreen() {
   const { data: stores, isLoading, error } = useStores();
-  const { setSelectedStore } = useStoreSelectionStore();
+  const { setSelectedStore, clearStore } = useStoreSelectionStore();
   const { signOut, profile } = useAuthStore();
   const [selected, setSelected] = useState<Store | null>(null);
   const insets = useSafeAreaInsets();
@@ -40,7 +40,7 @@ export default function StoreSelectScreen() {
       <View style={styles.header}>
         <Text style={styles.wordmark}>YANA</Text>
         <Pressable
-          onPress={signOut}
+          onPress={async () => { await clearStore(); await signOut(); }}
           hitSlop={12}
           style={({ pressed }) => ({ opacity: pressed ? 0.6 : 1 })}
           accessibilityRole="button"

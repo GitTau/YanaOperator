@@ -64,7 +64,7 @@ export default function LoginScreen() {
           {/* Card */}
           <View style={styles.card}>
             <Text style={[styles.cardTitle, { fontSize: fontScale(20) }]}>Sign In</Text>
-            <Text style={styles.cardSub}>Captain &amp; Admin access only</Text>
+            <Text style={styles.cardSub}>Captain & Admin access only</Text>
 
             {error && (
               <Pressable style={styles.errorBanner} onPress={clearError}>
@@ -128,7 +128,7 @@ export default function LoginScreen() {
 
           {/* Footer */}
           <Text style={styles.footer}>
-            Yana Yantron Technology Pvt. Ltd.{'\n'}Captain &amp; Admin portal only
+            Yana Yantron Technology Pvt. Ltd.{'\n'}Captain & Admin portal only
           </Text>
         </ScrollView>
       </KeyboardAvoidingView>

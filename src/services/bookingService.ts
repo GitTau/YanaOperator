@@ -219,9 +219,7 @@ export async function createBooking(
       end_date: end_date || null,
     })
     .eq('id', bookingId);
-  if (bookingResetError) {
-    console.error('[createBooking] Failed to reset booking status to Draft:', bookingResetError.message);
-  }
+  if (bookingResetError) throw new Error(`[createBooking] Failed to reset booking to Draft: ${bookingResetError.message}`);
 
   // The create_booking RPC marks vehicle + battery as 'In Use' immediately,
   // but assets must only be locked on Dispatch (when payment gate is cleared).
@@ -230,17 +228,13 @@ export async function createBooking(
     .from('vehicles')
     .update({ status: 'Available', assigned_battery_id: null })
     .eq('id', params.p_vehicle_id);
-  if (vehicleResetError) {
-    console.error('[createBooking] Failed to reset vehicle status:', vehicleResetError.message);
-  }
+  if (vehicleResetError) throw new Error(`[createBooking] Failed to release vehicle: ${vehicleResetError.message}`);
 
   const { error: batteryResetError } = await supabase
     .from('batteries')
     .update({ status: 'Available', assigned_vehicle_id: null })
     .eq('id', params.p_battery_id);
-  if (batteryResetError) {
-    console.error('[createBooking] Failed to reset battery status:', batteryResetError.message);
-  }
+  if (batteryResetError) throw new Error(`[createBooking] Failed to release battery: ${batteryResetError.message}`);
 
   if (start_date && end_date) {
     const { error: customerError } = await supabase

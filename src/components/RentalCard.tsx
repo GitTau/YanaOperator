@@ -19,7 +19,7 @@ interface RentalCardProps {
   onPause:       (b: BookingWithDetails) => void;
   onResume:      (b: BookingWithDetails) => void;
   onReturn:      (b: BookingWithDetails) => void;
-  onSwap:        (b: BookingWithDetails) => void;
+  onSwap:        (b: BookingWithDetails, type: 'vehicle' | 'battery') => void;
   onRenew:       (b: BookingWithDetails) => void;
 }
 
@@ -191,11 +191,11 @@ export function RentalCard({ booking, onDispatch, onCollectCash, onPause, onResu
               {/* Asset pills — only show when booking is not a Draft (already active/paused) */}
               {!isDraft && (
                 <View style={styles.assetPillRow}>
-                  <Pressable style={styles.assetPill} onPress={() => onSwap(booking)}>
+                  <Pressable style={styles.assetPill} onPress={() => onSwap(booking, 'vehicle')}>
                     <Ionicons name="bicycle-outline" size={13} color={Colors.textSecondary} />
                     <Text style={styles.assetPillText}>SWAP SCOOTER</Text>
                   </Pressable>
-                  <Pressable style={styles.assetPill} onPress={() => onSwap(booking)}>
+                  <Pressable style={styles.assetPill} onPress={() => onSwap(booking, 'battery')}>
                     <Ionicons name="battery-charging-outline" size={13} color={Colors.textSecondary} />
                     <Text style={styles.assetPillText}>SWAP BATTERY</Text>
                   </Pressable>
