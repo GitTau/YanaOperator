@@ -1,4 +1,4 @@
-﻿// ─────────────────────────────────────────────────────────────────────────────
+// ─────────────────────────────────────────────────────────────────────────────
 // EOD Report Screen — End-of-Day summary for ZAP Point operators
 //
 // Access: tap "Operator" button (top-right of header)
@@ -133,9 +133,16 @@ export default function EodReportScreen() {
 
     const totalActiveRentals = bList.filter(b => b.status === 'Active').length;
 
+    // Revenue = rent collected only — deposit portion excluded.
+    // deposit_collected = min(amount_paid, deposit_amount)
+    // rental_revenue    = amount_paid - deposit_collected
     const totalRevenueCollectedToday = bList
       .filter(b => isSameIstDay(b.started_at) || isSameIstDay(b.created_at))
-      .reduce((s, b) => s + (b.amount_paid || 0), 0);
+      .reduce((s, b) => {
+        const paid = b.amount_paid || 0;
+        const depositCollected = Math.min(paid, b.deposit_amount || 0);
+        return s + (paid - depositCollected);
+      }, 0);
 
     // Renewals: started today but created on a prior day
     const totalRenewalsToday = bList.filter(b =>
@@ -146,6 +153,8 @@ export default function EodReportScreen() {
 
     const totalNewBookingsToday = bList.filter(b => isSameIstDay(b.created_at)).length;
 
+    // Cash received = amount_paid_cash — exactly what the operator types
+    // in the cash box during payment collection. No adjustment needed.
     const totalCashReceivedToday = bList
       .filter(b => isSameIstDay(b.started_at) || isSameIstDay(b.created_at))
       .reduce((s, b) => s + (b.amount_paid_cash || 0), 0);
