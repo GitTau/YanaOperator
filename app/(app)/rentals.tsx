@@ -204,9 +204,11 @@ export default function RentalsScreen() {
     }
   };
 
-  // Pause directly opens PauseModal (no checklist — checklist only for return/vehicle_swap)
+  // Pause requires checklist first (AGENTS.md business rule)
   const handlePauseRequest = (booking: BookingWithDetails) => {
-    setPauseTarget(booking);
+    setChecklistBooking(booking);
+    setChecklistType('pause');
+    setShowChecklist(true);
   };
 
   // Swap — vehicle swap gates through checklist first; battery swap goes direct
@@ -262,7 +264,7 @@ export default function RentalsScreen() {
   const busyVehicleIds = useMemo(() => {
     const ids = new Set<string>();
     allBookings.forEach(b => {
-      if (b.status === 'Draft' || b.status === 'Active' || b.status === 'Paused') {
+      if (b.status === 'Draft' || b.status === 'Active') {
         ids.add(b.vehicle_id);
       }
     });
@@ -272,7 +274,7 @@ export default function RentalsScreen() {
   const busyBatteryIds = useMemo(() => {
     const ids = new Set<string>();
     allBookings.forEach(b => {
-      if (b.status === 'Draft' || b.status === 'Active' || b.status === 'Paused') {
+      if (b.status === 'Draft' || b.status === 'Active') {
         ids.add(b.battery_id);
       }
     });

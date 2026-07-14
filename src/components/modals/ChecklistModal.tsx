@@ -43,7 +43,7 @@ type ItemState = 'ok' | 'issue' | 'damaged' | null;
 interface ChecklistModalProps {
   visible: boolean;
   booking: BookingWithDetails | null;
-  checklistType: 'return' | 'pause';
+  checklistType: 'return' | 'pause' | 'vehicle_swap';
   onClose: () => void;
   /**
    * Called after checklist is submitted.
@@ -78,7 +78,8 @@ export function ChecklistModal({
   onClose,
   onComplete,
 }: ChecklistModalProps) {
-  const { data: items, isLoading, error: loadError } = useChecklistTemplate(checklistType);
+  const queryFlow = checklistType === 'vehicle_swap' ? 'return' : checklistType;
+  const { data: items, isLoading, error: loadError } = useChecklistTemplate(queryFlow);
 
   const [states, setStates]     = useState<Record<string, ItemState>>({});
   const [notes, setNotes]       = useState<Record<string, string>>({});
@@ -136,7 +137,7 @@ export function ChecklistModal({
         vehicleId:   booking.vehicle_id,
         storeId:     booking.store_id,
         bookingId:   booking.id,
-        flow:        checklistType,
+        flow:        checklistType === 'vehicle_swap' ? 'return' : checklistType,
         itemStates:  itemStatesStrings,
         itemNotes:   notes,
         submittedBy: profile?.id ?? null,

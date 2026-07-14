@@ -525,6 +525,30 @@ export async function dispatchBooking(
     throw new Error(`Failed to fetch booking details before dispatch: ${fetchError.message}`);
   }
 
+  // If resuming from Pause, verify that the assets are currently Available
+  if (booking && booking.status === 'Paused') {
+    if (vehicleId) {
+      const { data: vehicle } = await supabase
+        .from('vehicles')
+        .select('status, plate_number')
+        .eq('id', vehicleId)
+        .single();
+      if (vehicle && vehicle.status !== 'Available') {
+        throw new Error(`Vehicle ${vehicle.plate_number || ''} is currently ${vehicle.status}. Please swap the vehicle first before resuming.`);
+      }
+    }
+    if (batteryId) {
+      const { data: battery } = await supabase
+        .from('batteries')
+        .select('status, serial_number')
+        .eq('id', batteryId)
+        .single();
+      if (battery && battery.status !== 'Available') {
+        throw new Error(`Battery ${battery.serial_number || ''} is currently ${battery.status}. Please swap the battery first before resuming.`);
+      }
+    }
+  }
+
   const now = new Date();
   const updatedFields: Record<string, any> = {
     status: 'Active',
