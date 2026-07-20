@@ -10,10 +10,12 @@
     },
     "preview": {
       "distribution": "internal",
-      "channel": "preview"
+      "channel": "preview",
+      "node": "20.15.0"
     },
     "production": {
-      "channel": "production"
+      "channel": "production",
+      "node": "20.15.0"
     }
   },
   "submit": {
