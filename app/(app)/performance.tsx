@@ -20,6 +20,9 @@ import {
   StyleSheet,
   Text,
   View,
+  TextInput,
+  ActivityIndicator,
+  Alert,
 } from 'react-native';
 import { Colors, Radius, Spacing, Typography } from '../../src/constants/design';
 import { ErrorBanner, SkeletonCard, StoreLiveBadge } from '../../src/components/ui';
@@ -34,7 +37,7 @@ import {
   type AppraisalCycle,
 } from '../../src/hooks/useQueries';
 import { useStoreSelectionStore } from '../../src/stores/storeSelectionStore';
-import { parseLocalDate, formatLocalDate } from '../../src/services/bookingService';
+import { parseLocalDate, formatLocalDate, completeCaptainTask } from '../../src/services/bookingService';
 
 // ── Helpers ───────────────────────────────────────────────────────────────────
 
@@ -118,18 +121,40 @@ function StarRow({ stars }: { stars: number }) {
 
 // ── Task Card ─────────────────────────────────────────────────────────────────
 
-function TaskCard({ task }: { task: TaskEntry }) {
+function TaskCard({
+  task,
+  onComplete,
+}: {
+  task: TaskEntry;
+  onComplete: (taskId: string, notes: string) => Promise<void>;
+}) {
   const [expanded, setExpanded] = useState(false);
+  const [notes, setNotes] = useState('');
+  const [submitting, setSubmitting] = useState(false);
+
   const cfg = TASK_TYPE_CONFIG[task.task_type];
 
   const isDone         = task.status === 'done';
   const isOverride     = task.is_override_zero;
   const isPending      = task.status === 'pending';
 
+  const handleMarkComplete = async () => {
+    setSubmitting(true);
+    try {
+      await onComplete(task.id, notes);
+      setNotes('');
+      setExpanded(false);
+    } catch (err: any) {
+      Alert.alert('Error', err.message || 'Failed to update task');
+    } finally {
+      setSubmitting(false);
+    }
+  };
+
   return (
     <Pressable
       onPress={() => setExpanded((v) => !v)}
-      style={({ pressed }) => [styles.taskCard, pressed && { opacity: 0.85 }]}
+      style={({ pressed }) => [styles.taskCard, pressed && { opacity: 0.95 }]}
       accessibilityRole="button"
       accessibilityLabel={`Task: ${task.task_name}`}
     >
@@ -165,6 +190,14 @@ function TaskCard({ task }: { task: TaskEntry }) {
                 </Text>
               </View>
             )}
+
+            {/* Date badge */}
+            <View style={[styles.taskChip, { borderColor: Colors.borderLight }]}>
+              <Ionicons name="calendar-outline" size={10} color={Colors.textSecondary} />
+              <Text style={[styles.taskChipText, { color: Colors.textSecondary }]}>
+                {task.date}
+              </Text>
+            </View>
           </View>
 
           {/* Task name */}
@@ -187,7 +220,7 @@ function TaskCard({ task }: { task: TaskEntry }) {
 
           {/* Pending indicator */}
           {isPending && !isOverride && (
-            <Text style={styles.pendingRating}>Pending</Text>
+            <Text style={styles.pendingRating}>Pending Action</Text>
           )}
         </View>
 
@@ -200,10 +233,54 @@ function TaskCard({ task }: { task: TaskEntry }) {
       </View>
 
       {/* Remarks (expanded) */}
-      {expanded && task.remarks && (
+      {expanded && (
         <View style={styles.remarksBox}>
-          <Text style={styles.remarksLabel}>ADMIN REMARK</Text>
-          <Text style={styles.remarksText}>{task.remarks}</Text>
+          {task.remarks && (
+            <View style={{ marginBottom: 8 }}>
+              <Text style={styles.remarksLabel}>ADMIN REMARK</Text>
+              <Text style={styles.remarksText}>{task.remarks}</Text>
+            </View>
+          )}
+
+          {task.operator_remarks && (
+            <View style={{ marginBottom: 8 }}>
+              <Text style={styles.remarksLabel}>YOUR NOTES</Text>
+              <Text style={styles.remarksText}>{task.operator_remarks}</Text>
+            </View>
+          )}
+
+          {isPending && (
+            <View style={styles.completionForm}>
+              <Text style={styles.completionLabel}>COMPLETION NOTES (OPTIONAL)</Text>
+              <TextInput
+                value={notes}
+                onChangeText={setNotes}
+                placeholder="Enter details, proof of completion, or messages..."
+                placeholderTextColor={Colors.textMuted}
+                style={styles.completionInput}
+                multiline
+                numberOfLines={2}
+              />
+              <Pressable
+                onPress={handleMarkComplete}
+                disabled={submitting}
+                style={({ pressed }) => [
+                  styles.submitBtn,
+                  pressed && { opacity: 0.8 },
+                  submitting && { backgroundColor: Colors.borderLight }
+                ]}
+              >
+                {submitting ? (
+                  <ActivityIndicator size="small" color={Colors.brandNavy} />
+                ) : (
+                  <>
+                    <Ionicons name="checkmark-circle" size={14} color={Colors.brandNavy} style={{ marginRight: 4 }} />
+                    <Text style={styles.submitBtnText}>Mark as Done</Text>
+                  </>
+                )}
+              </Pressable>
+            </View>
+          )}
         </View>
       )}
     </Pressable>
@@ -215,9 +292,11 @@ function TaskCard({ task }: { task: TaskEntry }) {
 function TaskGroup({
   type,
   tasks,
+  onComplete,
 }: {
   type: keyof typeof TASK_TYPE_CONFIG;
   tasks: TaskEntry[];
+  onComplete: (taskId: string, notes: string) => Promise<void>;
 }) {
   const cfg = TASK_TYPE_CONFIG[type];
   if (tasks.length === 0) return null;
@@ -233,7 +312,9 @@ function TaskGroup({
           <Text style={[styles.taskGroupCountText, { color: cfg.color }]}>{tasks.length}</Text>
         </View>
       </View>
-      {tasks.map((t) => <TaskCard key={t.id} task={t} />)}
+      {tasks.map((t) => (
+        <TaskCard key={t.id} task={t} onComplete={onComplete} />
+      ))}
     </View>
   );
 }
@@ -272,6 +353,7 @@ export default function PerformanceScreen() {
     : 'tasks';
 
   const [activeSegment, setActiveSegment] = useState<'tasks' | 'performance' | 'attendance' | 'maintenance'>(initialSegment);
+  const [taskFilter, setTaskFilter] = useState<'active' | 'upcoming' | 'completed'>('active');
 
   // Sync segment if query params change
   React.useEffect(() => {
@@ -308,6 +390,11 @@ export default function PerformanceScreen() {
     }
   };
 
+  const handleCompleteTask = async (taskId: string, operatorRemarks: string) => {
+    await completeCaptainTask(taskId, operatorRemarks);
+    queryClient.invalidateQueries({ queryKey: queryKeys.taskEntries(captainId ?? '', 'all') });
+  };
+
   // ── Derived values ──────────────────────────────────────────────────────────
   const days       = cycle ? daysRemaining(cycle.end_date) : 0;
 
@@ -328,11 +415,24 @@ export default function PerformanceScreen() {
   const currentGroup = latestScore?.performance_group ?? null;
   const groupCfg     = currentGroup ? GROUP_CONFIG[currentGroup] : null;
 
-  // Tasks split by type (show all pending + today's done)
-  const visibleTasks    = tasks?.filter((t) => t.status === 'pending' || t.date === today) ?? [];
-  const regularTasks    = visibleTasks.filter((t) => t.task_type === 'regular');
-  const nonRegularTasks = visibleTasks.filter((t) => t.task_type === 'non_regular');
-  const emergencyTasks  = visibleTasks.filter((t) => t.task_type === 'emergency');
+  // Task classifications
+  const activeTasks = tasks?.filter((t) => t.status === 'pending' && t.date <= today) ?? [];
+  const upcomingTasks = tasks?.filter((t) => t.status === 'pending' && t.date > today) ?? [];
+  const completedTasks = tasks?.filter((t) => t.status === 'done' || t.status === 'not_done') ?? [];
+
+  const activeTasksCount = activeTasks.length;
+  const upcomingTasksCount = upcomingTasks.length;
+  const completedTasksCount = completedTasks.length;
+
+  const currentTasks = taskFilter === 'active'
+    ? activeTasks
+    : taskFilter === 'upcoming'
+    ? upcomingTasks
+    : completedTasks;
+
+  const regularTasks    = currentTasks.filter((t) => t.task_type === 'regular');
+  const nonRegularTasks = currentTasks.filter((t) => t.task_type === 'non_regular');
+  const emergencyTasks  = currentTasks.filter((t) => t.task_type === 'emergency');
 
   // Bonus tracker
   const countE = weeklyScores?.filter((w) => w.performance_group === 'E').length ?? 0;
@@ -377,62 +477,68 @@ export default function PerformanceScreen() {
         </View>
 
         {/* ── Segmented Switcher ────────────────────────────────────────── */}
-        <View style={styles.segmentContainer}>
-          <Pressable
-            onPress={() => setActiveSegment('tasks')}
-            style={[styles.segmentBtn, activeSegment === 'tasks' && styles.segmentBtnActive]}
+        <View style={styles.segmentContainerOuter}>
+          <ScrollView
+            horizontal
+            showsHorizontalScrollIndicator={false}
+            contentContainerStyle={styles.segmentContainer}
           >
-            <Ionicons
-              name={activeSegment === 'tasks' ? 'list' : 'list-outline'}
-              size={14}
-              color={activeSegment === 'tasks' ? Colors.brandNavy : Colors.textSecondary}
-            />
-            <Text style={[styles.segmentText, activeSegment === 'tasks' && styles.segmentTextActive]}>
-              Tasks
-            </Text>
-          </Pressable>
+            <Pressable
+              onPress={() => setActiveSegment('tasks')}
+              style={[styles.segmentBtn, activeSegment === 'tasks' && styles.segmentBtnActive]}
+            >
+              <Ionicons
+                name={activeSegment === 'tasks' ? 'list' : 'list-outline'}
+                size={14}
+                color={activeSegment === 'tasks' ? Colors.brandNavy : Colors.textSecondary}
+              />
+              <Text style={[styles.segmentText, activeSegment === 'tasks' && styles.segmentTextActive]}>
+                Tasks
+              </Text>
+            </Pressable>
 
-          <Pressable
-            onPress={() => setActiveSegment('performance')}
-            style={[styles.segmentBtn, activeSegment === 'performance' && styles.segmentBtnActive]}
-          >
-            <Ionicons
-              name={activeSegment === 'performance' ? 'ribbon' : 'ribbon-outline'}
-              size={14}
-              color={activeSegment === 'performance' ? Colors.brandNavy : Colors.textSecondary}
-            />
-            <Text style={[styles.segmentText, activeSegment === 'performance' && styles.segmentTextActive]}>
-              Performance
-            </Text>
-          </Pressable>
+            <Pressable
+              onPress={() => setActiveSegment('performance')}
+              style={[styles.segmentBtn, activeSegment === 'performance' && styles.segmentBtnActive]}
+            >
+              <Ionicons
+                name={activeSegment === 'performance' ? 'ribbon' : 'ribbon-outline'}
+                size={14}
+                color={activeSegment === 'performance' ? Colors.brandNavy : Colors.textSecondary}
+              />
+              <Text style={[styles.segmentText, activeSegment === 'performance' && styles.segmentTextActive]}>
+                Performance
+              </Text>
+            </Pressable>
 
-          <Pressable
-            onPress={() => setActiveSegment('attendance')}
-            style={[styles.segmentBtn, activeSegment === 'attendance' && styles.segmentBtnActive]}
-          >
-            <Ionicons
-              name={activeSegment === 'attendance' ? 'time' : 'time-outline'}
-              size={14}
-              color={activeSegment === 'attendance' ? Colors.brandNavy : Colors.textSecondary}
-            />
-            <Text style={[styles.segmentText, activeSegment === 'attendance' && styles.segmentTextActive]}>
-              Attendance
-            </Text>
-          </Pressable>
+            <Pressable
+              onPress={() => setActiveSegment('attendance')}
+              style={[styles.segmentBtn, activeSegment === 'attendance' && styles.segmentBtnActive]}
+            >
+              <Ionicons
+                name={activeSegment === 'attendance' ? 'time' : 'time-outline'}
+                size={14}
+                color={activeSegment === 'attendance' ? Colors.brandNavy : Colors.textSecondary}
+              />
+              <Text style={[styles.segmentText, activeSegment === 'attendance' && styles.segmentTextActive]}>
+                Attendance
+              </Text>
+            </Pressable>
 
-          <Pressable
-            onPress={() => setActiveSegment('maintenance')}
-            style={[styles.segmentBtn, activeSegment === 'maintenance' && styles.segmentBtnActive]}
-          >
-            <Ionicons
-              name={activeSegment === 'maintenance' ? 'construct' : 'construct-outline'}
-              size={14}
-              color={activeSegment === 'maintenance' ? Colors.brandNavy : Colors.textSecondary}
-            />
-            <Text style={[styles.segmentText, activeSegment === 'maintenance' && styles.segmentTextActive]}>
-              Maint.
-            </Text>
-          </Pressable>
+            <Pressable
+              onPress={() => setActiveSegment('maintenance')}
+              style={[styles.segmentBtn, activeSegment === 'maintenance' && styles.segmentBtnActive]}
+            >
+              <Ionicons
+                name={activeSegment === 'maintenance' ? 'construct' : 'construct-outline'}
+                size={14}
+                color={activeSegment === 'maintenance' ? Colors.brandNavy : Colors.textSecondary}
+              />
+              <Text style={[styles.segmentText, activeSegment === 'maintenance' && styles.segmentTextActive]}>
+                Maint.
+              </Text>
+            </Pressable>
+          </ScrollView>
         </View>
 
         {cycleError && (
@@ -466,30 +572,55 @@ export default function PerformanceScreen() {
                   </View>
                 )}
 
-                {/* Daily Tasks List */}
+                {/* Tasks List */}
                 <View style={styles.sectionCard}>
                   <View style={styles.sectionHeader}>
                     <Ionicons name="list-outline" size={16} color={Colors.textSecondary} />
                     <Text style={[Typography.labelCaps, { color: Colors.textSecondary }]}>
-                      TODAY'S TASKS
-                    </Text>
-                    <Text style={[Typography.caption, { color: Colors.textMuted, marginLeft: 'auto' }]}>
-                      {pendingTasks.length} pending · {doneTasks} done
+                      TASKS REGISTRY
                     </Text>
                   </View>
 
-                  {visibleTasks.length === 0 ? (
+                  {/* Task Sub-Tabs */}
+                  <View style={styles.subTabRow}>
+                    <Pressable
+                      onPress={() => setTaskFilter('active')}
+                      style={[styles.subTabBtn, taskFilter === 'active' && styles.subTabBtnActive]}
+                    >
+                      <Text style={[styles.subTabText, taskFilter === 'active' && styles.subTabTextActive]}>
+                        Active ({activeTasksCount})
+                      </Text>
+                    </Pressable>
+                    <Pressable
+                      onPress={() => setTaskFilter('upcoming')}
+                      style={[styles.subTabBtn, taskFilter === 'upcoming' && styles.subTabBtnActive]}
+                    >
+                      <Text style={[styles.subTabText, taskFilter === 'upcoming' && styles.subTabTextActive]}>
+                        Upcoming ({upcomingTasksCount})
+                      </Text>
+                    </Pressable>
+                    <Pressable
+                      onPress={() => setTaskFilter('completed')}
+                      style={[styles.subTabBtn, taskFilter === 'completed' && styles.subTabBtnActive]}
+                    >
+                      <Text style={[styles.subTabText, taskFilter === 'completed' && styles.subTabTextActive]}>
+                        History ({completedTasksCount})
+                      </Text>
+                    </Pressable>
+                  </View>
+
+                  {currentTasks.length === 0 ? (
                     <View style={styles.emptyTasks}>
                       <Ionicons name="checkmark-done-circle-outline" size={32} color={Colors.textMuted} />
                       <Text style={[Typography.bodySecondary, { color: Colors.textMuted, marginTop: 6 }]}>
-                        No tasks assigned
+                        No tasks in this category
                       </Text>
                     </View>
                   ) : (
                     <View style={{ gap: Spacing.sm }}>
-                      <TaskGroup type="emergency"   tasks={emergencyTasks} />
-                      <TaskGroup type="regular"     tasks={regularTasks} />
-                      <TaskGroup type="non_regular" tasks={nonRegularTasks} />
+                      <TaskGroup type="emergency"   tasks={emergencyTasks} onComplete={handleCompleteTask} />
+                      <TaskGroup type="regular"     tasks={regularTasks} onComplete={handleCompleteTask} />
+                      <TaskGroup type="non_regular" tasks={nonRegularTasks} onComplete={handleCompleteTask} />
                     </View>
                   )}
                 </View>
@@ -996,20 +1127,24 @@ const styles = StyleSheet.create({
   },
 
   // ── Segmented Switcher ─────────────────────────────────────────────────────
-  segmentContainer: {
-    flexDirection: 'row',
+  segmentContainerOuter: {
     backgroundColor: '#f1f5f9',
     borderRadius: Radius.button,
-    padding: 4,
+    padding: 2,
+    overflow: 'hidden',
+  },
+  segmentContainer: {
+    flexDirection: 'row',
     gap: 4,
+    padding: 2,
   },
   segmentBtn: {
-    flex: 1,
     flexDirection: 'row',
     alignItems: 'center',
     justifyContent: 'center',
     gap: 6,
     paddingVertical: 10,
+    paddingHorizontal: 16,
     borderRadius: Radius.button - 2,
     backgroundColor: 'transparent',
   },
@@ -1029,6 +1164,77 @@ const styles = StyleSheet.create({
   segmentTextActive: {
     color: Colors.brandNavy,
     fontWeight: '800',
+  },
+
+  // ── Sub Tab Row ────────────────────────────────────────────────────────────
+  subTabRow: {
+    flexDirection: 'row',
+    backgroundColor: Colors.bgApp,
+    borderRadius: Radius.sm,
+    padding: 2,
+    marginVertical: 4,
+    gap: 2,
+  },
+  subTabBtn: {
+    flex: 1,
+    paddingVertical: 8,
+    alignItems: 'center',
+    justifyContent: 'center',
+    borderRadius: Radius.sm - 2,
+  },
+  subTabBtnActive: {
+    backgroundColor: Colors.surfaceCard,
+    borderWidth: 1,
+    borderColor: Colors.borderLight,
+  },
+  subTabText: {
+    ...Typography.caption,
+    fontSize: 11,
+    fontWeight: '600',
+    color: Colors.textSecondary,
+  },
+  subTabTextActive: {
+    color: Colors.brandTeal,
+    fontWeight: '800',
+  },
+
+  // ── Completion Form ────────────────────────────────────────────────────────
+  completionForm: {
+    borderTopWidth: 1,
+    borderTopColor: Colors.borderLight,
+    paddingTop: 8,
+    gap: 6,
+  },
+  completionLabel: {
+    fontSize: 9,
+    fontFamily: 'Nunito-Bold',
+    color: Colors.textSecondary,
+    letterSpacing: 0.5,
+  },
+  completionInput: {
+    backgroundColor: Colors.surfaceCard,
+    borderColor: Colors.borderLight,
+    borderWidth: 1,
+    borderRadius: Radius.sm,
+    padding: 8,
+    fontSize: 12,
+    color: Colors.textPrimary,
+    minHeight: 50,
+    textAlignVertical: 'top',
+  },
+  submitBtn: {
+    backgroundColor: Colors.brandTeal,
+    borderRadius: Radius.sm,
+    paddingVertical: 8,
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'center',
+    marginTop: 4,
+  },
+  submitBtnText: {
+    fontSize: 12,
+    fontWeight: '800',
+    color: Colors.brandNavy,
   },
 
   // ── Tasks Progress Card ────────────────────────────────────────────────────

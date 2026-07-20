@@ -339,6 +339,7 @@ export interface TaskEntry {
   remarks: string | null;
   is_override_zero: boolean;
   override_reason: string | null;
+  operator_remarks: string | null;
   is_recurring: boolean;
   created_at: string | null;
 }

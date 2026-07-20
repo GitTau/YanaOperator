@@ -758,3 +758,16 @@ export async function logRepairAndClose(params: {
   if (vehicleError) throw new Error(`Release vehicle to Available failed: ${vehicleError.message}`);
 }
 
+// ── Complete Captain Task ─────────────────────────────────────────────────────
+export async function completeCaptainTask(taskId: string, operatorRemarks: string | null): Promise<void> {
+  const { error } = await supabase
+    .from('task_entries')
+    .update({
+      status: 'done',
+      operator_remarks: operatorRemarks ? operatorRemarks.trim() : null,
+    })
+    .eq('id', taskId);
+  if (error) throw new Error(`Complete task failed: ${error.message}`);
+}
+
+
