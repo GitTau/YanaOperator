@@ -121,6 +121,8 @@ export default function AppLayout() {
         <Tabs.Screen name="riders"      />
         {/* maintenance — hidden from tab bar, accessed via hamburger menu */}
         <Tabs.Screen name="maintenance" options={{ href: null }} />
+        {/* performance — hidden from tab bar, accessed via hamburger menu */}
+        <Tabs.Screen name="performance" options={{ href: null }} />
         {/* eod — hidden from tab bar, accessed via Operator button in header */}
         <Tabs.Screen name="eod"         options={{ href: null }} />
       </Tabs>

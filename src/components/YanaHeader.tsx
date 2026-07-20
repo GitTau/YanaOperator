@@ -40,8 +40,8 @@ type MenuItemDef = {
 
 const MENU_ITEMS: MenuItemDef[] = [
   { id: 'maintenance', label: 'Maintenance',  icon: 'construct-outline',       route: '/(app)/maintenance' },
-  { id: 'performance', label: 'Performance',  icon: 'bar-chart-outline',        isPlaceholder: true },
-  { id: 'tasks',       label: 'Tasks',         icon: 'checkbox-outline',         isPlaceholder: true },
+  { id: 'performance', label: 'Performance',  icon: 'bar-chart-outline',       route: '/(app)/performance?segment=performance' },
+  { id: 'tasks',       label: 'Tasks',         icon: 'checkbox-outline',        route: '/(app)/performance?segment=tasks' },
   { id: 'signout',     label: 'Sign Out',      icon: 'log-out-outline' },
 ];
 

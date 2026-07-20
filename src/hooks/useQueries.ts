@@ -20,6 +20,11 @@ export const queryKeys = {
   bookingsWithDetails: (storeId: string) => ['bookings', storeId, 'details'] as const,
   maintenanceJobs: (storeId: string) => ['maintenance_jobs', storeId] as const,
   globalConfig: ['global_config'] as const,
+  // Appraisal / Task keys
+  activeCycle: ['active_cycle'] as const,
+  captainByStore: (storeId: string) => ['captain_by_store', storeId] as const,
+  taskEntries: (captainId: string, date: string) => ['task_entries', captainId, date] as const,
+  weeklyScores: (captainId: string, cycleId: string) => ['weekly_scores', captainId, cycleId] as const,
 };
 
 // ── Stores (ZAP Points) ───────────────────────────────────────────────────────
@@ -307,4 +312,138 @@ export interface EodKpis {
   totalIdleScooters: number;
   totalUnderMaintenanceToday: number;
   totalReturnsToday: number;
+}
+
+// ── Appraisal / Task Types ────────────────────────────────────────────────────
+
+export interface AppraisalCycle {
+  id: string;
+  label: string;
+  start_date: string;
+  end_date: string;
+  status: string;
+  created_at: string | null;
+}
+
+export interface TaskEntry {
+  id: string;
+  captain_id: string;
+  cycle_id: string | null;
+  week_number: number;
+  date: string;
+  task_type: 'regular' | 'non_regular' | 'emergency';
+  task_name: string;
+  status: 'pending' | 'done';
+  stars: number | null;
+  rated_by: string | null;
+  remarks: string | null;
+  is_override_zero: boolean;
+  override_reason: string | null;
+  is_recurring: boolean;
+  created_at: string | null;
+}
+
+export interface WeeklyScore {
+  id: string;
+  captain_id: string;
+  cycle_id: string;
+  week_number: number;
+  avg_stars_regular: number;
+  avg_stars_non_regular: number;
+  avg_stars_emergency: number;
+  overall_avg: number;
+  performance_group: 'E' | 'M' | 'A';
+  bonus_eligibility: number;
+  approved_by: string | null;
+  approved_at: string | null;
+  created_at: string | null;
+}
+
+// ── Appraisal / Task Hooks ────────────────────────────────────────────────────
+
+/** Fetches the single active appraisal cycle. Cached 5 min — changes rarely. */
+export function useActiveCycle() {
+  return useQuery<AppraisalCycle | null>({
+    queryKey: queryKeys.activeCycle,
+    staleTime: 5 * 60 * 1000,
+    queryFn: async () => {
+      const { data, error } = await supabase
+        .from('appraisal_cycles')
+        .select('*')
+        .eq('status', 'active')
+        .order('start_date', { ascending: false })
+        .limit(1)
+        .maybeSingle();
+      if (error) throw new Error(error.message);
+      return (data as AppraisalCycle) ?? null;
+    },
+  });
+}
+
+/** Fetches the captain record for the currently selected store. */
+export function useCaptainByStore(storeId: string | null) {
+  return useQuery<{ id: string; name: string; store_id: string; zap_point: string | null } | null>({
+    queryKey: queryKeys.captainByStore(storeId ?? ''),
+    enabled: !!storeId,
+    staleTime: 5 * 60 * 1000,
+    queryFn: async () => {
+      if (!storeId) return null;
+      const { data, error } = await supabase
+        .from('captains')
+        .select('id, name, store_id, zap_point')
+        .eq('store_id', storeId)
+        .eq('status', 'active')
+        .limit(1)
+        .maybeSingle();
+      if (error) throw new Error(error.message);
+      return data ?? null;
+    },
+  });
+}
+
+/** Fetches task entries for a captain — all pending + recent done (last 30 days). Polled every 30s. */
+export function useMyTaskEntries(captainId: string | null, _date?: string) {
+  return useQuery<TaskEntry[]>({
+    queryKey: queryKeys.taskEntries(captainId ?? '', 'all'),
+    enabled: !!captainId,
+    refetchInterval: POLL_INTERVAL,
+    queryFn: async () => {
+      if (!captainId) return [];
+
+      // Fetch all pending tasks (any date) + done tasks from last 30 days
+      const thirtyDaysAgo = new Date();
+      thirtyDaysAgo.setDate(thirtyDaysAgo.getDate() - 30);
+      const cutoff = thirtyDaysAgo.toISOString().split('T')[0];
+
+      const { data, error } = await supabase
+        .from('task_entries')
+        .select('*')
+        .eq('captain_id', captainId)
+        .or(`status.eq.pending,and(status.eq.done,date.gte.${cutoff})`)
+        .order('date', { ascending: false })
+        .order('created_at', { ascending: false });
+      if (error) throw new Error(error.message);
+      return (data as TaskEntry[]) ?? [];
+    },
+  });
+}
+
+/** Fetches weekly scores for a captain within a cycle. */
+export function useMyWeeklyScores(captainId: string | null, cycleId: string | null) {
+  return useQuery<WeeklyScore[]>({
+    queryKey: queryKeys.weeklyScores(captainId ?? '', cycleId ?? ''),
+    enabled: !!captainId && !!cycleId,
+    refetchInterval: POLL_INTERVAL,
+    queryFn: async () => {
+      if (!captainId || !cycleId) return [];
+      const { data, error } = await supabase
+        .from('weekly_scores')
+        .select('*')
+        .eq('captain_id', captainId)
+        .eq('cycle_id', cycleId)
+        .order('week_number', { ascending: true });
+      if (error) throw new Error(error.message);
+      return (data as WeeklyScore[]) ?? [];
+    },
+  });
 }

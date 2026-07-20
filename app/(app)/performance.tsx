@@ -301,7 +301,7 @@ export default function PerformanceScreen() {
     queryClient.invalidateQueries({ queryKey: queryKeys.activeCycle });
     queryClient.invalidateQueries({ queryKey: queryKeys.captainByStore(storeId ?? '') });
     if (captainId) {
-      queryClient.invalidateQueries({ queryKey: queryKeys.taskEntries(captainId, today) });
+      queryClient.invalidateQueries({ queryKey: queryKeys.taskEntries(captainId, 'all') });
       if (cycle?.id) {
         queryClient.invalidateQueries({ queryKey: queryKeys.weeklyScores(captainId, cycle.id) });
       }
@@ -310,8 +310,16 @@ export default function PerformanceScreen() {
 
   // ── Derived values ──────────────────────────────────────────────────────────
   const days       = cycle ? daysRemaining(cycle.end_date) : 0;
-  const doneTasks  = tasks?.filter((t) => t.status === 'done').length ?? 0;
+
+  // Today's tasks (for the progress card)
+  const todayTasks  = tasks?.filter((t) => t.date === today) ?? [];
+  const doneTodayTasks  = todayTasks.filter((t) => t.status === 'done').length;
+  const totalTodayTasks = todayTasks.length;
+
+  // All pending tasks (the main inbox view)
+  const pendingTasks = tasks?.filter((t) => t.status === 'pending') ?? [];
   const totalTasks = tasks?.length ?? 0;
+  const doneTasks  = tasks?.filter((t) => t.status === 'done').length ?? 0;
 
   // Current week's performance group — from the latest weekly score
   const latestScore  = weeklyScores && weeklyScores.length > 0
@@ -320,10 +328,11 @@ export default function PerformanceScreen() {
   const currentGroup = latestScore?.performance_group ?? null;
   const groupCfg     = currentGroup ? GROUP_CONFIG[currentGroup] : null;
 
-  // Tasks split by type
-  const regularTasks    = tasks?.filter((t) => t.task_type === 'regular') ?? [];
-  const nonRegularTasks = tasks?.filter((t) => t.task_type === 'non_regular') ?? [];
-  const emergencyTasks  = tasks?.filter((t) => t.task_type === 'emergency') ?? [];
+  // Tasks split by type (show all pending + today's done)
+  const visibleTasks    = tasks?.filter((t) => t.status === 'pending' || t.date === today) ?? [];
+  const regularTasks    = visibleTasks.filter((t) => t.task_type === 'regular');
+  const nonRegularTasks = visibleTasks.filter((t) => t.task_type === 'non_regular');
+  const emergencyTasks  = visibleTasks.filter((t) => t.task_type === 'emergency');
 
   // Bonus tracker
   const countE = weeklyScores?.filter((w) => w.performance_group === 'E').length ?? 0;
@@ -440,7 +449,7 @@ export default function PerformanceScreen() {
             {activeSegment === 'tasks' && (
               <>
                 {/* Today's Tasks Progress Card */}
-                {totalTasks > 0 && (
+                {totalTodayTasks > 0 && (
                   <View style={styles.progressCard}>
                     <View style={styles.progressCardHeader}>
                       <Ionicons name="today" size={16} color={Colors.textTeal} />
@@ -448,11 +457,11 @@ export default function PerformanceScreen() {
                         TODAY'S PROGRESS
                       </Text>
                       <Text style={[Typography.badgeText, { color: Colors.textTeal }]}>
-                        {doneTasks} / {totalTasks} COMPLETED
+                        {doneTodayTasks} / {totalTodayTasks} COMPLETED
                       </Text>
                     </View>
                     <View style={styles.progressCardTrack}>
-                      <View style={[styles.progressCardFill, { width: `${(doneTasks / totalTasks) * 100}%` }]} />
+                      <View style={[styles.progressCardFill, { width: `${(doneTodayTasks / totalTodayTasks) * 100}%` }]} />
                     </View>
                   </View>
                 )}
@@ -465,15 +474,15 @@ export default function PerformanceScreen() {
                       TODAY'S TASKS
                     </Text>
                     <Text style={[Typography.caption, { color: Colors.textMuted, marginLeft: 'auto' }]}>
-                      {new Date().toLocaleDateString('en-IN', { weekday: 'long', day: 'numeric', month: 'short' })}
+                      {pendingTasks.length} pending · {doneTasks} done
                     </Text>
                   </View>
 
-                  {totalTasks === 0 ? (
+                  {visibleTasks.length === 0 ? (
                     <View style={styles.emptyTasks}>
                       <Ionicons name="checkmark-done-circle-outline" size={32} color={Colors.textMuted} />
                       <Text style={[Typography.bodySecondary, { color: Colors.textMuted, marginTop: 6 }]}>
-                        No tasks assigned today
+                        No tasks assigned
                       </Text>
                     </View>
                   ) : (
