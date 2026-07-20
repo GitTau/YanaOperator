@@ -770,4 +770,13 @@ export async function completeCaptainTask(taskId: string, operatorRemarks: strin
   if (error) throw new Error(`Complete task failed: ${error.message}`);
 }
 
+// ── Update Captain Push Token ──────────────────────────────────────────────────
+export async function updateCaptainPushToken(captainId: string, token: string): Promise<void> {
+  const { error } = await supabase
+    .from('captains')
+    .update({ push_token: token })
+    .eq('id', captainId);
+  if (error) throw new Error(`Update push token failed: ${error.message}`);
+}
+
 

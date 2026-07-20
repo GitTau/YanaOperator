@@ -25,7 +25,7 @@ import {
   SkeletonCard,
   StoreLiveBadge,
 } from '../../src/components/ui';
-import { useBookings, useGlobalConfig, useVehicles, queryKeys } from '../../src/hooks/useQueries';
+import { useBookings, useGlobalConfig, useVehicles, queryKeys, useCaptainByStore, useMyTaskEntries } from '../../src/hooks/useQueries';
 import { useStoreSelectionStore } from '../../src/stores/storeSelectionStore';
 import { formatCurrency, calculatePaymentGate, parseLocalDate } from '../../src/services/bookingService';
 import type { BookingWithDetails } from '../../src/lib/database.types';
@@ -38,12 +38,19 @@ export default function OverviewScreen() {
   const { data: bookings, isLoading: bookingsLoading, error: bookingsError, refetch: refetchBookings } = useBookings(storeId);
   const { data: vehicles, isLoading: vehiclesLoading } = useVehicles(storeId);
   const { data: globalConfig } = useGlobalConfig();
+  const { data: captain, isLoading: captainLoading } = useCaptainByStore(storeId);
+  const captainId = captain?.id ?? null;
+  const { data: tasks, isLoading: tasksLoading } = useMyTaskEntries(captainId, 'all');
 
-  const isLoading = bookingsLoading || vehiclesLoading;
+  const isLoading = bookingsLoading || vehiclesLoading || captainLoading || tasksLoading;
 
   const onRefresh = () => {
     queryClient.invalidateQueries({ queryKey: queryKeys.bookingsWithDetails(storeId ?? '') });
     queryClient.invalidateQueries({ queryKey: queryKeys.vehicles(storeId ?? '') });
+    queryClient.invalidateQueries({ queryKey: queryKeys.captainByStore(storeId ?? '') });
+    if (captainId) {
+      queryClient.invalidateQueries({ queryKey: queryKeys.taskEntries(captainId, 'all') });
+    }
   };
 
   // ── Derived KPIs ─────────────────────────────────────────────────────────
@@ -58,7 +65,19 @@ export default function OverviewScreen() {
   }, 0) ?? 0;
 
   const captainEarnings = totalRevenueRealised * 0.03;
-  const vehiclesIdle     = vehicles?.filter((v) => v.status === 'Available').length ?? 0;
+
+  // Pending tasks metrics & urgency color
+  const pendingTasks = tasks?.filter((t) => t.status === 'pending') ?? [];
+  const pendingTasksCount = pendingTasks.length;
+  const hasEmergency = pendingTasks.some((t) => t.task_type === 'emergency');
+  const hasNonRegular = pendingTasks.some((t) => t.task_type === 'non_regular');
+  const tasksUrgencyColor = pendingTasksCount === 0
+    ? Colors.statusActive
+    : hasEmergency
+    ? Colors.statusError
+    : hasNonRegular
+    ? Colors.statusWarning
+    : Colors.brandTeal;
 
   const paymentsPending = (bookings as BookingWithDetails[] | undefined)
     ?.filter((b) => b.status === 'Active' || b.status === 'Paused' || b.status === 'Draft')
@@ -149,10 +168,10 @@ export default function OverviewScreen() {
                   icon="bicycle-outline"
                 />
                 <KPICard
-                  label="VEHICLES IDLE"
-                  value={vehiclesIdle}
-                  accentColor={Colors.statusActive}
-                  icon="car-outline"
+                  label="PENDING TASKS"
+                  value={pendingTasksCount}
+                  accentColor={tasksUrgencyColor}
+                  icon="checkbox-outline"
                 />
               </View>
               <View style={styles.kpiRow}>
