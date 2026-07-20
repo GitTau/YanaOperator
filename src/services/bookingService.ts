@@ -99,7 +99,7 @@ export function calculateOverdueFines(
     if (today > secondPartDueDate) {
       isSecondPartOverdue = true;
       // Only charge 2nd part fine if they haven't paid the base rent + deposit
-      if (amountPaid < totalAmount + depositAmount) {
+      if ((totalAmount + depositAmount - amountPaid) > 1.0) {
         const diffTime = today.getTime() - secondPartDueDate.getTime();
         const daysLate2ndPart = Math.floor(diffTime / (1000 * 60 * 60 * 24));
         if (daysLate2ndPart >= 2) {
