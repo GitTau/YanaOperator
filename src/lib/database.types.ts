@@ -13,6 +13,7 @@
 export type UserRole = 'ADMIN' | 'OPERATOR' | 'RIDER';
 export type VehicleStatus = 'Available' | 'In Use' | 'Maintenance' | 'Inactive';
 export type BatteryStatus = 'Available' | 'In Use' | 'Maintenance';
+export type ChargerStatus = 'Available' | 'In Use' | 'Maintenance';
 export type BookingStatus = 'Draft' | 'Active' | 'Paused' | 'Completed' | 'Cancelled';
 export type RentalPlan = 'Weekly' | 'Monthly';
 export type LogType = 'VEHICLE' | 'BATTERY' | 'BOOKING' | 'MAINTENANCE' | 'SYSTEM';
@@ -80,12 +81,23 @@ export interface Customer {
   created_at: string;
 }
 
+// ── chargers ─────────────────────────────────────────────────────────────────
+export interface Charger {
+  id: string;
+  store_id: string;
+  serial_number: string;
+  status: ChargerStatus;
+  assigned_vehicle_id: string | null;
+  created_at: string;
+}
+
 // ── bookings (Rental Plans in Yana language) ─────────────────────────────────
 export interface Booking {
   id: string;
   customer_id: string;
   vehicle_id: string;
   battery_id: string;
+  charger_id?: string | null;
   store_id: string;
   status: BookingStatus;
   rental_plan: RentalPlan;
@@ -108,11 +120,12 @@ export interface Booking {
   end_date: string | null;
 }
 
-// Booking with joined customer + vehicle + battery data (for rental cards)
+// Booking with joined customer + vehicle + battery + charger data (for rental cards)
 export interface BookingWithDetails extends Booking {
   customer: Customer;
   vehicle: Vehicle | null;
   battery: Battery | null;
+  charger?: Charger | null;
 }
 
 // ── maintenance_jobs ─────────────────────────────────────────────────────────
@@ -234,6 +247,7 @@ export interface Database {
       profiles: { Row: Profile; Insert: Omit<Profile, 'created_at'>; Update: Partial<Profile>; Relationships: [] };
       vehicles: { Row: Vehicle; Insert: Omit<Vehicle, 'id' | 'created_at'>; Update: Partial<Vehicle>; Relationships: [] };
       batteries: { Row: Battery; Insert: Omit<Battery, 'id' | 'created_at'>; Update: Partial<Battery>; Relationships: [] };
+      chargers: { Row: Charger; Insert: Omit<Charger, 'id' | 'created_at'>; Update: Partial<Charger>; Relationships: [] };
       customers: { Row: Customer; Insert: Omit<Customer, 'id' | 'created_at'>; Update: Partial<Customer>; Relationships: [] };
       bookings: { Row: Booking; Insert: Omit<Booking, 'id' | 'created_at'>; Update: Partial<Booking>; Relationships: [] };
       maintenance_jobs: { Row: MaintenanceJob; Insert: Omit<MaintenanceJob, 'id' | 'created_at'>; Update: Partial<MaintenanceJob>; Relationships: [] };

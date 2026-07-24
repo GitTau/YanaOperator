@@ -21,6 +21,8 @@ Notifications.setNotificationHandler({
     shouldShowAlert: true,
     shouldPlaySound: true,
     shouldSetBadge: false,
+    shouldShowBanner: true,
+    shouldShowList: true,
   }),
 });
 
@@ -120,21 +122,8 @@ export default function AppLayout() {
   const captainId = captain?.id ?? null;
 
   useEffect(() => {
-    if (!captainId) return;
-
-    async function setupNotifications() {
-      try {
-        const token = await registerForPushNotificationsAsync();
-        if (token && captain?.push_token !== token) {
-          await updateCaptainPushToken(captainId, token);
-        }
-      } catch (err) {
-        console.warn('Failed to set up notifications:', err);
-      }
-    }
-
-    setupNotifications();
-  }, [captainId, captain?.push_token]);
+    // Push notifications placeholder (Known Gap #9)
+  }, [captainId]);
 
   const handleSignOut = async () => {
     await clearStore();

@@ -41,6 +41,45 @@ export function formatLocalDate(date: Date): string {
   return `${year}-${month}-${day}`;
 }
 
+// ── Effective End Date (Accounts for live pause extensions) ────────────────────
+// For Paused bookings, each day that passes past midnight increments the end date by 1 day.
+export function getEffectiveEndDate(
+  endDateStr: string | null | undefined,
+  status: string | null | undefined,
+  pausedAtStr: string | null | undefined,
+): Date | null {
+  const baseEnd = parseLocalDate(endDateStr);
+  if (!baseEnd) return null;
+
+  if (status === 'Paused' && pausedAtStr) {
+    const pauseStart = new Date(pausedAtStr);
+    if (!isNaN(pauseStart.getTime())) {
+      const pauseStartDate = new Date(pauseStart.getFullYear(), pauseStart.getMonth(), pauseStart.getDate());
+      const now = new Date();
+      const todayDate = new Date(now.getFullYear(), now.getMonth(), now.getDate());
+      const diffTime = todayDate.getTime() - pauseStartDate.getTime();
+      const diffDays = Math.max(0, Math.floor(diffTime / (1000 * 60 * 60 * 24)));
+
+      if (diffDays > 0) {
+        baseEnd.setDate(baseEnd.getDate() + diffDays);
+      }
+    }
+  }
+
+  return baseEnd;
+}
+
+export function getEffectiveEndDateStr(
+  endDateStr: string | null | undefined,
+  status: string | null | undefined,
+  pausedAtStr: string | null | undefined,
+): string | null {
+  const effectiveDate = getEffectiveEndDate(endDateStr, status, pausedAtStr);
+  if (!effectiveDate) return endDateStr ?? null;
+  return formatLocalDate(effectiveDate);
+}
+
+
 // ── Overdue Fines Calculation ───────────────────────────────────────────────
 // Standard: Grace period 1 day. Fines accumulate starting day 2 (₹300/day).
 // Monthly 2nd part: due date T+9 days. Grace period T+10 and T+11.
@@ -53,12 +92,13 @@ export function calculateOverdueFines(
   depositAmount: number,
   amountPaid: number,
   status?: string | null,
+  pausedAtStr?: string | null,
 ): {
   overdueFine: number;
   isSecondPartOverdue: boolean;
   secondPartDueDateStr: string | null;
 } {
-  if (status === 'Completed' || status === 'Cancelled') {
+  if (status === 'Completed' || status === 'Cancelled' || status === 'Paused') {
     return { overdueFine: 0, isSecondPartOverdue: false, secondPartDueDateStr: null };
   }
 
@@ -67,7 +107,7 @@ export function calculateOverdueFines(
   }
 
   const startDate = parseLocalDate(startDateStr);
-  const endDate = parseLocalDate(endDateStr);
+  const endDate = getEffectiveEndDate(endDateStr, status, pausedAtStr);
   if (!startDate || !endDate) {
     return { overdueFine: 0, isSecondPartOverdue: false, secondPartDueDateStr: null };
   }
@@ -129,6 +169,7 @@ export function calculatePaymentGate(
   startDateStr?: string | null,
   endDateStr?: string | null,
   status?: string | null,
+  pausedAtStr?: string | null,
 ): {
   gatePct: number | null;  // null for Monthly (fixed floor, not a %)
   gateAmount: number;
@@ -146,6 +187,7 @@ export function calculatePaymentGate(
     depositAmount,
     amountPaid,
     status,
+    pausedAtStr,
   );
 
   const totalFines = finesAmount + overdueFine;
@@ -199,9 +241,9 @@ export function calculatePricing(
 
 // ── create_booking RPC ────────────────────────────────────────────────────────
 export async function createBooking(
-  params: CreateBookingParams & { start_date?: string; end_date?: string }
+  params: CreateBookingParams & { start_date?: string; end_date?: string; charger_id?: string | null }
 ): Promise<string> {
-  const { start_date, end_date, ...rpcParams } = params;
+  const { start_date, end_date, charger_id, ...rpcParams } = params;
   const { data, error } = await supabase.rpc('create_booking', rpcParams);
   if (error) throw new Error(`Create booking failed: ${error.message}`);
 
@@ -217,6 +259,7 @@ export async function createBooking(
       started_at: null,
       start_date: start_date || null,
       end_date: end_date || null,
+      charger_id: charger_id || null,
     })
     .eq('id', bookingId);
   if (bookingResetError) throw new Error(`[createBooking] Failed to reset booking to Draft: ${bookingResetError.message}`);
@@ -235,6 +278,14 @@ export async function createBooking(
     .update({ status: 'Available', assigned_vehicle_id: null })
     .eq('id', params.p_battery_id);
   if (batteryResetError) throw new Error(`[createBooking] Failed to release battery: ${batteryResetError.message}`);
+
+  if (charger_id) {
+    const { error: chargerResetError } = await supabase
+      .from('chargers')
+      .update({ status: 'Available', assigned_vehicle_id: null })
+      .eq('id', charger_id);
+    if (chargerResetError) throw new Error(`[createBooking] Failed to release charger: ${chargerResetError.message}`);
+  }
 
   if (start_date && end_date) {
     const { error: customerError } = await supabase
@@ -271,25 +322,14 @@ export async function recordPayment(params: RecordPaymentParams): Promise<void> 
       .single();
 
     if (bookingAfter && bookingAfter.status === 'Active' && bookingBefore.paused_at && bookingBefore.end_date) {
-      const pauseStart = new Date(bookingBefore.paused_at);
-      const now = new Date();
-      const pauseStartDate = new Date(pauseStart.getFullYear(), pauseStart.getMonth(), pauseStart.getDate());
-      const todayDate = new Date(now.getFullYear(), now.getMonth(), now.getDate());
-      const diffTime = todayDate.getTime() - pauseStartDate.getTime();
-      const diffDays = Math.max(0, Math.floor(diffTime / (1000 * 60 * 60 * 24)));
-
-      if (diffDays > 0) {
-        const currentEnd = parseLocalDate(bookingBefore.end_date);
-        if (currentEnd) {
-          currentEnd.setDate(currentEnd.getDate() + diffDays);
-          const newEndDateStr = formatLocalDate(currentEnd);
-          const { error: updateError } = await supabase
-            .from('bookings')
-            .update({ end_date: newEndDateStr })
-            .eq('id', params.p_booking_id);
-          if (updateError) {
-            console.error('[recordPayment] Failed to shift end_date on auto-unpause:', updateError.message);
-          }
+      const effectiveEndDateStr = getEffectiveEndDateStr(bookingBefore.end_date, 'Paused', bookingBefore.paused_at);
+      if (effectiveEndDateStr && effectiveEndDateStr !== bookingBefore.end_date) {
+        const { error: updateError } = await supabase
+          .from('bookings')
+          .update({ end_date: effectiveEndDateStr })
+          .eq('id', params.p_booking_id);
+        if (updateError) {
+          console.error('[recordPayment] Failed to shift end_date on auto-unpause:', updateError.message);
         }
       }
     }
@@ -302,6 +342,36 @@ export async function swapAssets(params: SwapAssetsParams): Promise<void> {
   if (error) throw new Error(`Swap assets failed: ${error.message}`);
 }
 
+// ── swap_charger (direct mutation) ────────────────────────────────────────────
+export async function swapCharger(params: {
+  bookingId: string;
+  vehicleId?: string | null;
+  oldChargerId?: string | null;
+  newChargerId?: string | null;
+}): Promise<void> {
+  if (params.oldChargerId) {
+    const { error: oldErr } = await supabase
+      .from('chargers')
+      .update({ status: 'Available', assigned_vehicle_id: null })
+      .eq('id', params.oldChargerId);
+    if (oldErr) console.warn('[swapCharger] Failed to release old charger:', oldErr.message);
+  }
+
+  if (params.newChargerId) {
+    const { error: newErr } = await supabase
+      .from('chargers')
+      .update({ status: 'In Use', assigned_vehicle_id: params.vehicleId || null })
+      .eq('id', params.newChargerId);
+    if (newErr) throw new Error(`Assign new charger failed: ${newErr.message}`);
+  }
+
+  const { error: bookingErr } = await supabase
+    .from('bookings')
+    .update({ charger_id: params.newChargerId || null })
+    .eq('id', params.bookingId);
+  if (bookingErr) throw new Error(`Update booking charger failed: ${bookingErr.message}`);
+}
+
 // ── Pause booking (direct update) ─────────────────────────────────────────────
 export async function pauseBooking(
   bookingId: string,
@@ -309,6 +379,7 @@ export async function pauseBooking(
   batteryId: string,
   pauseReason: string,
   hasIssues?: boolean,
+  chargerId?: string | null,
 ): Promise<void> {
   // Step 1: Update booking to Paused
   const { error: bookingError } = await supabase
@@ -335,6 +406,15 @@ export async function pauseBooking(
     .update({ status: 'Available', assigned_vehicle_id: null })
     .eq('id', batteryId);
   if (batteryError) throw new Error(`Release battery failed: ${batteryError.message}`);
+
+  // Step 4: Release charger if assigned
+  if (chargerId) {
+    const { error: chargerError } = await supabase
+      .from('chargers')
+      .update({ status: 'Available', assigned_vehicle_id: null })
+      .eq('id', chargerId);
+    if (chargerError) console.warn('[pauseBooking] Release charger failed:', chargerError.message);
+  }
 }
 
 // ── Complete / Return booking (direct update) ────────────────────────────────
@@ -343,6 +423,7 @@ export async function completeBooking(
   vehicleId: string,
   batteryId: string,
   hasIssues?: boolean,
+  chargerId?: string | null,
 ): Promise<void> {
   const { error: bookingError } = await supabase
     .from('bookings')
@@ -367,6 +448,15 @@ export async function completeBooking(
     .update({ status: 'Available', assigned_vehicle_id: null })
     .eq('id', batteryId);
   if (batteryError) throw new Error(`Release battery failed: ${batteryError.message}`);
+
+  // Release charger
+  if (chargerId) {
+    const { error: chargerError } = await supabase
+      .from('chargers')
+      .update({ status: 'Available', assigned_vehicle_id: null })
+      .eq('id', chargerId);
+    if (chargerError) console.warn('[completeBooking] Release charger failed:', chargerError.message);
+  }
 }
 
 // ── Renew Booking (v1.9) ──────────────────────────────────────────────────────
@@ -513,17 +603,20 @@ export async function dispatchBooking(
   bookingId: string,
   vehicleId: string,
   batteryId: string,
+  chargerId?: string | null,
 ): Promise<void> {
-  // Fetch current booking state to see if it is a Resume from Pause
+  // Fetch current booking state to see if it is a Resume from Pause or first Dispatch of Draft
   const { data: booking, error: fetchError } = await supabase
     .from('bookings')
-    .select('status, paused_at, end_date')
+    .select('status, paused_at, end_date, rental_plan, charger_id')
     .eq('id', bookingId)
     .single();
 
   if (fetchError) {
     throw new Error(`Failed to fetch booking details before dispatch: ${fetchError.message}`);
   }
+
+  const activeChargerId = chargerId ?? booking?.charger_id ?? null;
 
   // If resuming from Pause, verify that the assets are currently Available
   if (booking && booking.status === 'Paused') {
@@ -547,6 +640,16 @@ export async function dispatchBooking(
         throw new Error(`Battery ${battery.serial_number || ''} is currently ${battery.status}. Please swap the battery first before resuming.`);
       }
     }
+    if (activeChargerId) {
+      const { data: charger } = await supabase
+        .from('chargers')
+        .select('status, serial_number')
+        .eq('id', activeChargerId)
+        .single();
+      if (charger && charger.status !== 'Available') {
+        throw new Error(`Charger ${charger.serial_number || ''} is currently ${charger.status}. Please swap the charger first before resuming.`);
+      }
+    }
   }
 
   const now = new Date();
@@ -555,22 +658,21 @@ export async function dispatchBooking(
     started_at: now.toISOString(),
   };
 
-  // If unpausing, calculate the pause duration in calendar days and shift end_date forward
+  // If dispatching a Draft for the first time, align start_date to dispatch day & calculate end_date
+  if (booking && booking.status === 'Draft') {
+    const todayStr = formatLocalDate(now);
+    const planDays = booking.rental_plan === 'Monthly' ? 29 : 6;
+    const endDateObj = new Date(now.getFullYear(), now.getMonth(), now.getDate() + planDays);
+    updatedFields.start_date = todayStr;
+    updatedFields.end_date = formatLocalDate(endDateObj);
+  }
+
+  // If unpausing, calculate effective end date with accumulated pause days and clear pause timestamp
   if (booking && booking.status === 'Paused' && booking.paused_at) {
-    const pauseStart = new Date(booking.paused_at);
-    const pauseStartDate = new Date(pauseStart.getFullYear(), pauseStart.getMonth(), pauseStart.getDate());
-    const todayDate = new Date(now.getFullYear(), now.getMonth(), now.getDate());
-    const diffTime = todayDate.getTime() - pauseStartDate.getTime();
-    const diffDays = Math.max(0, Math.floor(diffTime / (1000 * 60 * 60 * 24)));
-
+    const effectiveEndDateStr = getEffectiveEndDateStr(booking.end_date, 'Paused', booking.paused_at);
     updatedFields.paused_at = null; // Clear pause timestamp
-
-    if (diffDays > 0 && booking.end_date) {
-      const currentEnd = parseLocalDate(booking.end_date);
-      if (currentEnd) {
-        currentEnd.setDate(currentEnd.getDate() + diffDays);
-        updatedFields.end_date = formatLocalDate(currentEnd);
-      }
+    if (effectiveEndDateStr) {
+      updatedFields.end_date = effectiveEndDateStr;
     }
   }
 
@@ -591,6 +693,14 @@ export async function dispatchBooking(
     .update({ status: 'In Use', assigned_vehicle_id: vehicleId })
     .eq('id', batteryId);
   if (batteryError) throw new Error(`Battery status update failed: ${batteryError.message}`);
+
+  if (activeChargerId) {
+    const { error: chargerError } = await supabase
+      .from('chargers')
+      .update({ status: 'In Use', assigned_vehicle_id: vehicleId })
+      .eq('id', activeChargerId);
+    if (chargerError) throw new Error(`Charger status update failed: ${chargerError.message}`);
+  }
 }
 
 // ── Create customer (Rider) ───────────────────────────────────────────────────

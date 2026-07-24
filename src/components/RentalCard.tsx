@@ -9,7 +9,7 @@ import React, { useState } from 'react';
 import { Pressable, StyleSheet, Text, View } from 'react-native';
 import { Colors, Radius, Spacing, Typography } from '../constants/design';
 import type { BookingWithDetails } from '../lib/database.types';
-import { calculatePaymentGate, formatCurrency, toNodeId, parseLocalDate } from '../services/bookingService';
+import { calculatePaymentGate, formatCurrency, toNodeId, parseLocalDate, getEffectiveEndDate } from '../services/bookingService';
 import { PaymentGateBadge, StatusBadge } from './ui';
 
 interface RentalCardProps {
@@ -19,18 +19,24 @@ interface RentalCardProps {
   onPause:       (b: BookingWithDetails) => void;
   onResume:      (b: BookingWithDetails) => void;
   onReturn:      (b: BookingWithDetails) => void;
-  onSwap:        (b: BookingWithDetails, type: 'vehicle' | 'battery') => void;
+  onSwap:        (b: BookingWithDetails, type: 'vehicle' | 'battery' | 'charger') => void;
   onRenew:       (b: BookingWithDetails) => void;
 }
 
 export function RentalCard({ booking, onDispatch, onCollectCash, onPause, onResume, onReturn, onSwap, onRenew }: RentalCardProps) {
   const [financialExpanded, setFinancialExpanded] = useState(false);
 
+  const isDraft  = booking.status === 'Draft';
+  const isActive = booking.status === 'Active';
+  const isPaused = booking.status === 'Paused';
+  const isClosed = booking.status === 'Completed' || booking.status === 'Cancelled';
+
   const gate = calculatePaymentGate(
     booking.rental_plan, booking.total_amount,
     booking.deposit_amount, booking.fines_amount, booking.amount_paid,
     booking.start_date, booking.end_date,
     booking.status,
+    booking.paused_at,
   );
 
   const paidPct       = Math.min(gate.paidPct, 1);
@@ -38,29 +44,32 @@ export function RentalCard({ booking, onDispatch, onCollectCash, onPause, onResu
   const barColor      = gate.isCleared ? Colors.statusActive : paidPct >= 0.5 ? Colors.statusWarning : Colors.statusError;
   const totalFines    = booking.fines_amount + gate.overdueFine;
 
-  const startDisp = booking.start_date
-    ? parseLocalDate(booking.start_date)?.toLocaleDateString('en-IN', { day: 'numeric', month: 'short' })
-    : '—';
+  // Dispatch Date (only show actual dispatch date, or 'Not Dispatched' for Drafts)
+  const dispatchDateObj = booking.started_at
+    ? new Date(booking.started_at)
+    : (booking.start_date ? parseLocalDate(booking.start_date) : null);
 
-  const returnDue = booking.end_date
-    ? parseLocalDate(booking.end_date)?.toLocaleDateString('en-IN', { day: 'numeric', month: 'short' })
+  const dispatchDisp = !isDraft && dispatchDateObj && !isNaN(dispatchDateObj.getTime())
+    ? dispatchDateObj.toLocaleDateString('en-IN', { day: 'numeric', month: 'short' })
+    : 'Not Dispatched';
+
+  // Return Due Date (live extended by 1 day per day passed if Paused)
+  const effectiveEndObj = getEffectiveEndDate(booking.end_date, booking.status, booking.paused_at);
+  const returnDue = effectiveEndObj
+    ? effectiveEndObj.toLocaleDateString('en-IN', { day: 'numeric', month: 'short' })
     : '—';
 
   const initials = booking.customer.name.slice(0, 2).toUpperCase();
 
   const isOverdue = (() => {
-    const end = parseLocalDate(booking.end_date);
+    if (isPaused || isClosed) return false;
+    const end = getEffectiveEndDate(booking.end_date, booking.status, booking.paused_at);
     if (!end) return false;
     end.setHours(0, 0, 0, 0);
     const today = new Date();
     today.setHours(0, 0, 0, 0);
     return end < today;
   })();
-
-  const isDraft  = booking.status === 'Draft';
-  const isActive = booking.status === 'Active';
-  const isPaused = booking.status === 'Paused';
-  const isClosed = booking.status === 'Completed' || booking.status === 'Cancelled';
 
   return (
     <View style={[styles.card, isOverdue && styles.cardOverdue]}>
@@ -104,6 +113,12 @@ export function RentalCard({ booking, onDispatch, onCollectCash, onPause, onResu
           <Ionicons name="battery-charging-outline" size={11} color={Colors.brandTeal} />
           <Text style={styles.assetChipText}>{booking.battery?.serial_number ?? 'No Battery'}</Text>
         </View>
+        {booking.charger?.serial_number ? (
+          <View style={styles.assetChip}>
+            <Ionicons name="power-outline" size={11} color={Colors.brandTeal} />
+            <Text style={styles.assetChipText}>{booking.charger.serial_number}</Text>
+          </View>
+        ) : null}
         <View style={{ flex: 1 }} />
         <Text style={styles.nodeId}>#{toNodeId(booking.id)}</Text>
       </View>
@@ -118,7 +133,9 @@ export function RentalCard({ booking, onDispatch, onCollectCash, onPause, onResu
         </Text>
         <View style={{ flex: 1 }} />
         <Ionicons name="calendar-outline" size={11} color={Colors.textMuted} style={{ marginRight: 3 }} />
-        <Text style={styles.dueLabel}>{startDisp} - {returnDue}</Text>
+        <Text style={styles.dueLabel}>
+          {isDraft ? `Due: ${returnDue}` : `${dispatchDisp} → ${returnDue}`}
+        </Text>
       </View>
 
       {/* ── Financial Health ──────────────────────────────────────────── */}
@@ -193,11 +210,15 @@ export function RentalCard({ booking, onDispatch, onCollectCash, onPause, onResu
                 <View style={styles.assetPillRow}>
                   <Pressable style={styles.assetPill} onPress={() => onSwap(booking, 'vehicle')}>
                     <Ionicons name="bicycle-outline" size={13} color={Colors.textSecondary} />
-                    <Text style={styles.assetPillText}>SWAP SCOOTER</Text>
+                    <Text style={styles.assetPillText}>SCOOTER</Text>
                   </Pressable>
                   <Pressable style={styles.assetPill} onPress={() => onSwap(booking, 'battery')}>
                     <Ionicons name="battery-charging-outline" size={13} color={Colors.textSecondary} />
-                    <Text style={styles.assetPillText}>SWAP BATTERY</Text>
+                    <Text style={styles.assetPillText}>BATTERY</Text>
+                  </Pressable>
+                  <Pressable style={styles.assetPill} onPress={() => onSwap(booking, 'charger')}>
+                    <Ionicons name="power-outline" size={13} color={Colors.textSecondary} />
+                    <Text style={styles.assetPillText}>CHARGER</Text>
                   </Pressable>
                 </View>
               )}

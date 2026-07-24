@@ -17,7 +17,7 @@ import {
   View,
 } from 'react-native';
 import { Colors, Radius, Spacing, Typography } from '../../constants/design';
-import type { Battery, Customer, GlobalConfig, Vehicle } from '../../lib/database.types';
+import type { Battery, Charger, Customer, GlobalConfig, Vehicle } from '../../lib/database.types';
 import {
   calculatePricing,
   createBooking,
@@ -171,6 +171,7 @@ interface BookRideModalProps {
   busyCustomerIds: Set<string>;
   vehicles: Vehicle[];
   batteries: Battery[];
+  chargers?: Charger[];
   globalConfig: GlobalConfig | null;
 }
 
@@ -184,20 +185,22 @@ export function BookRideModal({
   busyCustomerIds,
   vehicles,
   batteries,
+  chargers = [],
   globalConfig,
 }: BookRideModalProps) {
   const [selectedCustomer, setSelectedCustomer] = useState<Customer | null>(null);
   const [selectedVehicle, setSelectedVehicle] = useState<Vehicle | null>(null);
   const [selectedBattery, setSelectedBattery] = useState<Battery | null>(null);
+  const [selectedCharger, setSelectedCharger] = useState<Charger | null>(null);
   const [plan, setPlan] = useState<'Weekly' | 'Monthly'>('Weekly');
-  const [openDropdown, setOpenDropdown] = useState<'customer' | 'vehicle' | 'battery' | null>(null);
+  const [openDropdown, setOpenDropdown] = useState<'customer' | 'vehicle' | 'battery' | 'charger' | null>(null);
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
 
   const [startDate, setStartDate] = useState(() => formatDate(new Date()));
   const [showCalendar, setShowCalendar] = useState(false);
 
-  const toggleDropdown = (type: 'customer' | 'vehicle' | 'battery') => {
+  const toggleDropdown = (type: 'customer' | 'vehicle' | 'battery' | 'charger') => {
     setOpenDropdown(prev => prev === type ? null : type);
   };
 
@@ -212,6 +215,7 @@ export function BookRideModal({
 
   const availableVehicles = vehicles.filter((v) => v.status === 'Available');
   const availableBatteries = batteries.filter((b) => b.status === 'Available');
+  const availableChargers = chargers.filter((c) => c.status === 'Available');
 
   const pricing = useMemo(() => {
     if (!globalConfig) return null;
@@ -232,6 +236,7 @@ export function BookRideModal({
         p_customer_id: selectedCustomer!.id,
         p_vehicle_id: selectedVehicle!.id,
         p_battery_id: selectedBattery!.id,
+        charger_id: selectedCharger?.id ?? null,
         p_store_id: storeId,
         p_rental_plan: plan,
         p_total_amount: pricing.subtotal,
@@ -254,6 +259,7 @@ export function BookRideModal({
     setSelectedCustomer(null);
     setSelectedVehicle(null);
     setSelectedBattery(null);
+    setSelectedCharger(null);
     setPlan('Weekly');
     setStartDate(formatDate(new Date()));
     setShowCalendar(false);
@@ -364,6 +370,44 @@ export function BookRideModal({
             renderItem={(b, isSelected) => (
               <Text style={[Typography.bodyPrimary, { fontWeight: '600', color: isSelected ? Colors.brandTeal : Colors.textPrimary }]}>
                 ⚡ {b.serial_number}
+              </Text>
+            )}
+          />
+
+          {/* CHARGER DROPDOWN (OPTIONAL) */}
+          <DropdownSelector
+            label="CHARGER (OPTIONAL)"
+            placeholder="Select a charger (if rider needs)..."
+            selectedItem={selectedCharger}
+            items={availableChargers}
+            isOpen={openDropdown === 'charger'}
+            onToggle={() => toggleDropdown('charger')}
+            onSelect={(charger) => {
+              setSelectedCharger(charger);
+              setOpenDropdown(null);
+            }}
+            iconName="power-outline"
+            getItemKey={(c) => c.id}
+            emptyText="No chargers available"
+            renderSelected={(c) => (
+              <View style={{ flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', flex: 1 }}>
+                <Text style={[Typography.bodyPrimary, { fontWeight: '700', color: Colors.textPrimary }]}>
+                  🔌 {c.serial_number}
+                </Text>
+                <Pressable
+                  onPress={(e) => {
+                    e.stopPropagation();
+                    setSelectedCharger(null);
+                  }}
+                  hitSlop={8}
+                >
+                  <Text style={{ fontSize: 11, color: Colors.statusError, fontWeight: '600' }}>Remove</Text>
+                </Pressable>
+              </View>
+            )}
+            renderItem={(c, isSelected) => (
+              <Text style={[Typography.bodyPrimary, { fontWeight: '600', color: isSelected ? Colors.brandTeal : Colors.textPrimary }]}>
+                🔌 {c.serial_number}
               </Text>
             )}
           />

@@ -14,7 +14,7 @@ import {
   View,
 } from 'react-native';
 import { Colors, Radius, Spacing, Typography } from '../../constants/design';
-import type { Battery, BookingWithDetails, Vehicle } from '../../lib/database.types';
+import type { Battery, BookingWithDetails, Charger, Vehicle } from '../../lib/database.types';
 import {
   calculateOverdueFines,
   completeBooking,
@@ -23,6 +23,7 @@ import {
   maskAadhaar,
   pauseBooking,
   swapAssets,
+  swapCharger,
 } from '../../services/bookingService';
 import { Divider, YanaButton } from '../ui';
 
@@ -49,7 +50,7 @@ export function PauseModal({ visible, booking, onClose, onSuccess, hasIssues = f
     setLoading(true);
     setError(null);
     try {
-      await pauseBooking(booking.id, booking.vehicle_id, booking.battery_id, reason.trim(), hasIssues);
+      await pauseBooking(booking.id, booking.vehicle_id, booking.battery_id, reason.trim(), hasIssues, booking.charger_id);
       handleClose();
       onSuccess();
     } catch (err) {
@@ -129,7 +130,7 @@ export function ReturnModal({ visible, booking, onClose, onSuccess, damageFines 
     setLoading(true);
     setError(null);
     try {
-      await completeBooking(booking.id, booking.vehicle_id, booking.battery_id, hasIssues);
+      await completeBooking(booking.id, booking.vehicle_id, booking.battery_id, hasIssues, booking.charger_id);
       handleClose();
       onSuccess();
     } catch (err) {
@@ -150,6 +151,7 @@ export function ReturnModal({ visible, booking, onClose, onSuccess, damageFines 
     booking.deposit_amount,
     booking.amount_paid,
     booking.status,
+    booking.paused_at,
   );
   const totalFines = booking.fines_amount + overdueFine;
   const balanceDue        = booking.total_amount + booking.deposit_amount + totalFines - booking.amount_paid;
@@ -246,7 +248,7 @@ function SummaryLine({ label, value, valueColor = Colors.textPrimary }: { label:
 }
 
 // ─────────────────────────────────────────────────────────────────────────────
-// SwapModal — swap vehicle and/or battery via swap_assets RPC
+// SwapModal — swap vehicle, battery, or charger
 // ─────────────────────────────────────────────────────────────────────────────
 
 interface SwapModalProps {
@@ -258,15 +260,29 @@ interface SwapModalProps {
   operatorId: string;
   availableVehicles: Vehicle[];
   availableBatteries: Battery[];
-  /** Whether the captain is swapping a vehicle or a battery */
-  swapType: 'vehicle' | 'battery';
+  availableChargers?: Charger[];
+  /** Whether the captain is swapping a vehicle, battery, or charger */
+  swapType: 'vehicle' | 'battery' | 'charger';
   /** True if checklist found issues on the vehicle being swapped out */
   hasVehicleIssues?: boolean;
 }
 
-export function SwapModal({ visible, booking, onClose, onSuccess, storeId, operatorId, availableVehicles, availableBatteries, swapType, hasVehicleIssues = false }: SwapModalProps) {
+export function SwapModal({
+  visible,
+  booking,
+  onClose,
+  onSuccess,
+  storeId,
+  operatorId,
+  availableVehicles,
+  availableBatteries,
+  availableChargers = [],
+  swapType,
+  hasVehicleIssues = false,
+}: SwapModalProps) {
   const [newVehicle, setNewVehicle] = useState<Vehicle | null>(null);
   const [newBattery, setNewBattery] = useState<Battery | null>(null);
+  const [newCharger, setNewCharger] = useState<Charger | null>(null);
   const [fines, setFines] = useState('');
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
@@ -278,14 +294,23 @@ export function SwapModal({ visible, booking, onClose, onSuccess, storeId, opera
     setLoading(true);
     setError(null);
     try {
-      await swapAssets({
-        p_booking_id: booking.id,
-        p_store_id: storeId,
-        p_new_vehicle_id: newVehicle?.id ?? booking.vehicle_id,
-        p_new_battery_id: newBattery?.id ?? booking.battery_id,
-        p_additional_fines: parseFloat(fines) || 0,
-        p_operator_id: operatorId,
-      });
+      if (swapType === 'charger') {
+        await swapCharger({
+          bookingId: booking.id,
+          vehicleId: booking.vehicle_id,
+          oldChargerId: booking.charger_id,
+          newChargerId: newCharger?.id ?? null,
+        });
+      } else {
+        await swapAssets({
+          p_booking_id: booking.id,
+          p_store_id: storeId,
+          p_new_vehicle_id: newVehicle?.id ?? booking.vehicle_id,
+          p_new_battery_id: newBattery?.id ?? booking.battery_id,
+          p_additional_fines: parseFloat(fines) || 0,
+          p_operator_id: operatorId,
+        });
+      }
       handleClose();
       onSuccess();
     } catch (err) {
@@ -295,11 +320,11 @@ export function SwapModal({ visible, booking, onClose, onSuccess, storeId, opera
     }
   };
 
-  const handleClose = () => { setNewVehicle(null); setNewBattery(null); setFines(''); setError(null); onClose(); };
+  const handleClose = () => { setNewVehicle(null); setNewBattery(null); setNewCharger(null); setFines(''); setError(null); onClose(); };
   if (!booking) return null;
 
-  const title = swapType === 'vehicle' ? 'Swap Scooter' : 'Swap Battery';
-  const confirmLabel = swapType === 'vehicle' ? 'Confirm Scooter Swap' : 'Confirm Battery Swap';
+  const title = swapType === 'vehicle' ? 'Swap Scooter' : swapType === 'battery' ? 'Swap Battery' : 'Swap Charger';
+  const confirmLabel = swapType === 'vehicle' ? 'Confirm Scooter Swap' : swapType === 'battery' ? 'Confirm Battery Swap' : 'Confirm Charger Swap';
 
   return (
     <Modal visible={visible} animationType="slide" presentationStyle="pageSheet" onRequestClose={handleClose}>
@@ -312,7 +337,7 @@ export function SwapModal({ visible, booking, onClose, onSuccess, storeId, opera
           </View>
 
           <Text style={styles.currentAssets}>
-            Current: {booking.vehicle?.plate_number ?? 'No Vehicle'} / {booking.battery?.serial_number ?? 'No Battery'}
+            Current: {booking.vehicle?.plate_number ?? 'No Vehicle'} / {booking.battery?.serial_number ?? 'No Battery'} / {booking.charger?.serial_number ?? 'No Charger'}
           </Text>
 
           {hasVehicleIssues && swapType === 'vehicle' && (
@@ -361,8 +386,31 @@ export function SwapModal({ visible, booking, onClose, onSuccess, storeId, opera
             </>
           )}
 
-          <Text style={[Typography.labelCaps, styles.fieldLabel]}>ADDITIONAL FINE (₹) — optional</Text>
-          <TextInput style={styles.amountInput} value={fines} onChangeText={(t) => { setFines(t); setError(null); }} keyboardType="numeric" placeholder="0" placeholderTextColor={Colors.textSecondary} />
+          {swapType === 'charger' && (
+            <>
+              <Text style={[Typography.labelCaps, styles.fieldLabel]}>SELECT REPLACEMENT CHARGER</Text>
+              {availableChargers.length === 0 && (
+                <Text style={[Typography.bodySecondary, { color: Colors.textMuted, marginBottom: Spacing.sm }]}>No available chargers at this ZAP Point.</Text>
+              )}
+              {availableChargers.map((c) => (
+                <Pressable
+                  key={c.id}
+                  style={[styles.listItem, newCharger?.id === c.id && styles.listItemSelected]}
+                  onPress={() => setNewCharger(newCharger?.id === c.id ? null : c)}
+                >
+                  <Ionicons name="power-outline" size={15} color={newCharger?.id === c.id ? Colors.brandCyan : Colors.textSecondary} style={{ marginRight: 8 }} />
+                  <Text style={[styles.listItemText, newCharger?.id === c.id && { color: Colors.brandCyan }]}>{c.serial_number}</Text>
+                </Pressable>
+              ))}
+            </>
+          )}
+
+          {swapType !== 'charger' && (
+            <>
+              <Text style={[Typography.labelCaps, styles.fieldLabel]}>ADDITIONAL FINE (₹) — optional</Text>
+              <TextInput style={styles.amountInput} value={fines} onChangeText={(t) => { setFines(t); setError(null); }} keyboardType="numeric" placeholder="0" placeholderTextColor={Colors.textSecondary} />
+            </>
+          )}
 
           {error && <Text style={styles.errorText}>⚠ {error}</Text>}
         </View>

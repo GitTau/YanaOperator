@@ -41,7 +41,7 @@ import {
   useMaintenanceJobs,
 } from '../../src/hooks/useQueries';
 import { useStoreSelectionStore } from '../../src/stores/storeSelectionStore';
-import { calculatePaymentGate, parseLocalDate } from '../../src/services/bookingService';
+import { calculatePaymentGate, parseLocalDate, getEffectiveEndDateStr } from '../../src/services/bookingService';
 import type { BookingWithDetails } from '../../src/lib/database.types';
 
 // ── IST date helpers ──────────────────────────────────────────────────────────
@@ -194,16 +194,18 @@ export default function EodReportScreen() {
           b.start_date,
           b.end_date,
           b.status,
+          b.paused_at,
         );
         const pendingAmount = Math.max(0, gate.gateAmount - (b.amount_paid || 0));
+        const effectiveEndStr = getEffectiveEndDateStr(b.end_date, b.status, b.paused_at);
         return {
           bookingId: b.id,
           riderName: (b.customer as { name: string } | null)?.name ?? '-',
           vehicleNumber: (b.vehicle as { plate_number: string } | null)?.plate_number ?? '-',
           rentalPlan: b.rental_plan,
           startDate: b.start_date,
-          endDate: b.end_date,
-          daysRemaining: daysRemaining(b.end_date),
+          endDate: effectiveEndStr,
+          daysRemaining: daysRemaining(effectiveEndStr),
           totalRentCollected: b.amount_paid || 0,
           cashCollected: b.amount_paid_cash || 0,
           onlineCollected: b.amount_paid_online || 0,

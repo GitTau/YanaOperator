@@ -28,7 +28,7 @@ import { ChecklistModal } from '../../src/components/modals/ChecklistModal';
 import { PauseModal, ReturnModal, SwapModal } from '../../src/components/modals/OpsModals';
 import { RenewModal } from '../../src/components/modals/RenewModal';
 import { EmptyState, ErrorBanner, SearchBar, SkeletonCard } from '../../src/components/ui';
-import { useBatteries, useBookings, useCustomers, useGlobalConfig, useVehicles, queryKeys } from '../../src/hooks/useQueries';
+import { useBatteries, useBookings, useChargers, useCustomers, useGlobalConfig, useVehicles, queryKeys } from '../../src/hooks/useQueries';
 import { useAuthStore } from '../../src/stores/authStore';
 import { useStoreSelectionStore } from '../../src/stores/storeSelectionStore';
 import { dispatchBooking } from '../../src/services/bookingService';
@@ -126,7 +126,7 @@ export default function RentalsScreen() {
   const [pauseTarget, setPauseTarget]     = useState<BookingWithDetails | null>(null);
   const [returnTarget, setReturnTarget]   = useState<BookingWithDetails | null>(null);
   const [swapTarget, setSwapTarget]       = useState<BookingWithDetails | null>(null);
-  const [swapType, setSwapType]           = useState<'vehicle' | 'battery'>('vehicle');
+  const [swapType, setSwapType]           = useState<'vehicle' | 'battery' | 'charger'>('vehicle');
   const [renewTarget, setRenewTarget]     = useState<BookingWithDetails | null>(null);
   const [actionLoading, setActionLoading] = useState<string | null>(null);
 
@@ -143,12 +143,14 @@ export default function RentalsScreen() {
   const { data: customers }   = useCustomers(storeId);
   const { data: vehicles }    = useVehicles(storeId);
   const { data: batteries }   = useBatteries(storeId);
+  const { data: chargers }    = useChargers(storeId);
   const { data: globalConfig } = useGlobalConfig();
 
   const invalidate = () => {
     queryClient.invalidateQueries({ queryKey: queryKeys.bookingsWithDetails(storeId ?? '') });
     queryClient.invalidateQueries({ queryKey: queryKeys.vehicles(storeId ?? '') });
     queryClient.invalidateQueries({ queryKey: queryKeys.batteries(storeId ?? '') });
+    queryClient.invalidateQueries({ queryKey: queryKeys.chargers(storeId ?? '') });
   };
 
   // ── Filter logic ─────────────────────────────────────────────────────────
@@ -212,7 +214,7 @@ export default function RentalsScreen() {
   };
 
   // Swap — vehicle swap gates through checklist first; battery swap goes direct
-  const handleSwapRequest = (booking: BookingWithDetails, type: 'vehicle' | 'battery') => {
+  const handleSwapRequest = (booking: BookingWithDetails, type: 'vehicle' | 'battery' | 'charger') => {
     setSwapType(type);
     if (type === 'vehicle') {
       // Must inspect the current vehicle before swapping it out (business rule)
@@ -220,7 +222,7 @@ export default function RentalsScreen() {
       setChecklistType('vehicle_swap');
       setShowChecklist(true);
     } else {
-      // Battery swap — no checklist needed, go direct to swap modal
+      // Battery or Charger swap — no checklist needed, go direct to swap modal
       setSwapTarget(booking);
     }
   };
@@ -288,6 +290,10 @@ export default function RentalsScreen() {
   const availableBatteries = useMemo(() => {
     return (batteries ?? []).filter(b => b.status === 'Available' && !busyBatteryIds.has(b.id));
   }, [batteries, busyBatteryIds]);
+
+  const availableChargers = useMemo(() => {
+    return (chargers ?? []).filter(c => c.status === 'Available');
+  }, [chargers]);
 
   // Switch board view — reset status chip to All
   const handleBoardSwitch = (view: BoardView) => {
@@ -465,6 +471,7 @@ export default function RentalsScreen() {
         busyCustomerIds={busyCustomerIds}
         vehicles={availableVehicles}
         batteries={availableBatteries}
+        chargers={availableChargers}
         globalConfig={globalConfig ?? null}
       />
       <PaymentModal
@@ -501,6 +508,7 @@ export default function RentalsScreen() {
         operatorId={operatorId}
         availableVehicles={availableVehicles}
         availableBatteries={availableBatteries}
+        availableChargers={availableChargers}
       />
       <RenewModal
         visible={!!renewTarget}

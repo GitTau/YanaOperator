@@ -117,6 +117,7 @@ export function RenewModal({
       booking.deposit_amount,
       booking.amount_paid,
       booking.status,
+      booking.paused_at,
     );
     const totalFines = booking.fines_amount + overdueFine + checklistFines;
     const balanceDue = booking.total_amount + booking.deposit_amount + totalFines - booking.amount_paid;

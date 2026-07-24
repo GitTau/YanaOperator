@@ -15,6 +15,7 @@ export const queryKeys = {
   stores: ['stores'] as const,
   vehicles: (storeId: string) => ['vehicles', storeId] as const,
   batteries: (storeId: string) => ['batteries', storeId] as const,
+  chargers: (storeId: string) => ['chargers', storeId] as const,
   customers: (storeId: string) => ['customers', storeId] as const,
   bookings: (storeId: string) => ['bookings', storeId] as const,
   bookingsWithDetails: (storeId: string) => ['bookings', storeId, 'details'] as const,
@@ -79,6 +80,24 @@ export function useBatteries(storeId: string | null) {
   });
 }
 
+// ── Chargers ──────────────────────────────────────────────────────────────────
+export function useChargers(storeId: string | null) {
+  return useQuery({
+    queryKey: queryKeys.chargers(storeId ?? ''),
+    enabled: !!storeId,
+    refetchInterval: POLL_INTERVAL,
+    queryFn: async () => {
+      const { data, error } = await supabase
+        .from('chargers')
+        .select('*')
+        .eq('store_id', storeId as string)
+        .order('serial_number');
+      if (error) throw new Error(error.message);
+      return data ?? [];
+    },
+  });
+}
+
 // ── Customers (Riders) ────────────────────────────────────────────────────────
 export function useCustomers(storeId: string | null) {
   return useQuery({
@@ -97,7 +116,7 @@ export function useCustomers(storeId: string | null) {
   });
 }
 
-// ── Bookings with joined customer + vehicle + battery ─────────────────────────
+// ── Bookings with joined customer + vehicle + battery + charger ───────────────
 export function useBookings(storeId: string | null) {
   return useQuery({
     queryKey: queryKeys.bookingsWithDetails(storeId ?? ''),
@@ -110,7 +129,8 @@ export function useBookings(storeId: string | null) {
           *,
           customer:customers(*),
           vehicle:vehicles(*),
-          battery:batteries(*)
+          battery:batteries(*),
+          charger:chargers(*)
         `)
         .eq('store_id', storeId as string)
         .order('created_at', { ascending: false });

@@ -91,6 +91,7 @@ export default function OverviewScreen() {
         b.start_date,
         b.end_date,
         b.status,
+        b.paused_at,
       );
       const balance = Math.max(0, gate.gateAmount - b.amount_paid);
       return sum + balance;
