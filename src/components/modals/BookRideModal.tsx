@@ -392,7 +392,7 @@ export function BookRideModal({
             renderSelected={(c) => (
               <View style={{ flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', flex: 1 }}>
                 <Text style={[Typography.bodyPrimary, { fontWeight: '700', color: Colors.textPrimary }]}>
-                  🔌 {c.serial_number}
+                  🔌 {c.serial_number} {c.ah_rating ? `(${c.ah_rating})` : ''}
                 </Text>
                 <Pressable
                   onPress={(e) => {
@@ -407,7 +407,7 @@ export function BookRideModal({
             )}
             renderItem={(c, isSelected) => (
               <Text style={[Typography.bodyPrimary, { fontWeight: '600', color: isSelected ? Colors.brandTeal : Colors.textPrimary }]}>
-                🔌 {c.serial_number}
+                🔌 {c.serial_number} {c.ah_rating ? `(${c.ah_rating})` : ''}
               </Text>
             )}
           />

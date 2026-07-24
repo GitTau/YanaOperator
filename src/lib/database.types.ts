@@ -86,6 +86,7 @@ export interface Charger {
   id: string;
   store_id: string;
   serial_number: string;
+  ah_rating?: string | null;
   status: ChargerStatus;
   assigned_vehicle_id: string | null;
   created_at: string;

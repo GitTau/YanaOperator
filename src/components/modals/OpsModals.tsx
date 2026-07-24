@@ -399,7 +399,9 @@ export function SwapModal({
                   onPress={() => setNewCharger(newCharger?.id === c.id ? null : c)}
                 >
                   <Ionicons name="power-outline" size={15} color={newCharger?.id === c.id ? Colors.brandCyan : Colors.textSecondary} style={{ marginRight: 8 }} />
-                  <Text style={[styles.listItemText, newCharger?.id === c.id && { color: Colors.brandCyan }]}>{c.serial_number}</Text>
+                  <Text style={[styles.listItemText, newCharger?.id === c.id && { color: Colors.brandCyan }]}>
+                    {c.serial_number} {c.ah_rating ? `(${c.ah_rating})` : ''}
+                  </Text>
                 </Pressable>
               ))}
             </>

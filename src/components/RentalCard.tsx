@@ -116,7 +116,10 @@ export function RentalCard({ booking, onDispatch, onCollectCash, onPause, onResu
         {booking.charger?.serial_number ? (
           <View style={styles.assetChip}>
             <Ionicons name="power-outline" size={11} color={Colors.brandTeal} />
-            <Text style={styles.assetChipText}>{booking.charger.serial_number}</Text>
+            <Text style={styles.assetChipText}>
+              {booking.charger.serial_number}
+              {booking.charger.ah_rating ? ` (${booking.charger.ah_rating})` : ''}
+            </Text>
           </View>
         ) : null}
         <View style={{ flex: 1 }} />

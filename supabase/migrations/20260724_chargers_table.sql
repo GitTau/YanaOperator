@@ -12,6 +12,7 @@ CREATE TABLE IF NOT EXISTS public.chargers (
   id uuid PRIMARY KEY DEFAULT gen_random_uuid(),
   store_id uuid NOT NULL REFERENCES public.stores(store_id) ON DELETE CASCADE,
   serial_number text UNIQUE NOT NULL,
+  ah_rating text DEFAULT '10Ah',
   status text NOT NULL DEFAULT 'Available' CHECK (status IN ('Available', 'In Use', 'Maintenance')),
   assigned_vehicle_id uuid REFERENCES public.vehicles(id) ON DELETE SET NULL,
   created_at timestamptz DEFAULT now()
@@ -19,6 +20,7 @@ CREATE TABLE IF NOT EXISTS public.chargers (
 
 COMMENT ON TABLE public.chargers IS 'EV vehicle chargers tagged to specific ZAP Point stores';
 COMMENT ON COLUMN public.chargers.serial_number IS 'Unique serial number/identifier of charger e.g. CHG-001';
+COMMENT ON COLUMN public.chargers.ah_rating IS 'Ampere-hour rating of charger e.g. 10Ah, 15Ah';
 COMMENT ON COLUMN public.chargers.status IS 'Charger operational status: Available, In Use, Maintenance';
 
 -- ─── STEP 2: Enable RLS and Policies ─────────────────────────────────────────
