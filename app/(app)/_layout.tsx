@@ -82,6 +82,15 @@ const TAB_CONFIG: { iconActive: IoniconName; iconInactive: IoniconName; label: s
 async function registerForPushNotificationsAsync() {
   if (Platform.OS === 'web') return null;
 
+  if (Platform.OS === 'android') {
+    await Notifications.setNotificationChannelAsync('default', {
+      name: 'default',
+      importance: Notifications.AndroidImportance.MAX,
+      vibrationPattern: [0, 250, 250, 250],
+      lightColor: '#06B6D4',
+    });
+  }
+
   const { status: existingStatus } = await Notifications.getPermissionsAsync();
   let finalStatus = existingStatus;
 
@@ -91,7 +100,7 @@ async function registerForPushNotificationsAsync() {
   }
 
   if (finalStatus !== 'granted') {
-    console.warn('Failed to get push token for push notification!');
+    console.warn('Failed to get push token for push notification! Permission not granted.');
     return null;
   }
 
@@ -104,6 +113,7 @@ async function registerForPushNotificationsAsync() {
       return null;
     }
     const token = (await Notifications.getExpoPushTokenAsync({ projectId })).data;
+    console.log('Expo Push Token generated:', token);
     return token;
   } catch (error) {
     console.error('Error getting expo push token', error);
@@ -122,8 +132,32 @@ export default function AppLayout() {
   const captainId = captain?.id ?? null;
 
   useEffect(() => {
-    // Push notifications placeholder (Known Gap #9)
-  }, [captainId]);
+    if (!captainId) return;
+
+    async function setupNotifications() {
+      try {
+        const token = await registerForPushNotificationsAsync();
+        if (token && captain?.push_token !== token) {
+          await updateCaptainPushToken(captainId, token);
+          console.log(`Updated push token for captain ${captainId}`);
+        }
+      } catch (err) {
+        console.warn('Failed to set up notifications:', err);
+      }
+    }
+
+    setupNotifications();
+  }, [captainId, captain?.push_token]);
+
+  useEffect(() => {
+    const subscription = Notifications.addNotificationResponseReceivedListener((response) => {
+      const data = response.notification.request.content.data;
+      if (data?.segment === 'tasks') {
+        router.push('/(app)/performance?segment=tasks');
+      }
+    });
+    return () => subscription.remove();
+  }, []);
 
   const handleSignOut = async () => {
     await clearStore();
