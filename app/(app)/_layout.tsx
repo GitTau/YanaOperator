@@ -32,7 +32,7 @@ import { YanaHeader } from '../../src/components/YanaHeader';
 import { useAuthStore } from '../../src/stores/authStore';
 import { useStoreSelectionStore } from '../../src/stores/storeSelectionStore';
 import { useIsEodTime, useCaptainByStore } from '../../src/hooks/useQueries';
-import { updateCaptainPushToken } from '../../src/services/bookingService';
+import { updateCaptainPushToken, updateStoreCaptainsPushToken } from '../../src/services/bookingService';
 
 type IoniconName = React.ComponentProps<typeof Ionicons>['name'];
 
@@ -107,11 +107,8 @@ async function registerForPushNotificationsAsync() {
   try {
     const projectId =
       Constants.expoConfig?.extra?.eas?.projectId ??
-      Constants.easConfig?.projectId;
-    if (!projectId) {
-      console.warn('No Expo project ID found');
-      return null;
-    }
+      Constants.easConfig?.projectId ??
+      '99e37bb8-f90b-41f0-918d-b74ab582b341';
     const token = (await Notifications.getExpoPushTokenAsync({ projectId })).data;
     console.log('Expo Push Token generated:', token);
     return token;
@@ -132,14 +129,18 @@ export default function AppLayout() {
   const captainId = captain?.id ?? null;
 
   useEffect(() => {
-    if (!captainId) return;
-
     async function setupNotifications() {
       try {
         const token = await registerForPushNotificationsAsync();
-        if (token && captain?.push_token !== token) {
-          await updateCaptainPushToken(captainId, token);
-          console.log(`Updated push token for captain ${captainId}`);
+        if (token) {
+          if (captainId) {
+            await updateCaptainPushToken(captainId, token);
+            console.log(`Updated push token for captain ${captainId}`);
+          }
+          if (storeId) {
+            await updateStoreCaptainsPushToken(storeId, token);
+            console.log(`Updated store captains push token for store ${storeId}`);
+          }
         }
       } catch (err) {
         console.warn('Failed to set up notifications:', err);
@@ -147,13 +148,15 @@ export default function AppLayout() {
     }
 
     setupNotifications();
-  }, [captainId, captain?.push_token]);
+  }, [captainId, storeId]);
 
   useEffect(() => {
     const subscription = Notifications.addNotificationResponseReceivedListener((response) => {
       const data = response.notification.request.content.data;
       if (data?.segment === 'tasks') {
         router.push('/(app)/performance?segment=tasks');
+      } else {
+        router.push('/(app)/notifications');
       }
     });
     return () => subscription.remove();
@@ -211,6 +214,8 @@ export default function AppLayout() {
         <Tabs.Screen name="maintenance" options={{ href: null }} />
         {/* performance — hidden from tab bar, accessed via hamburger menu */}
         <Tabs.Screen name="performance" options={{ href: null }} />
+        {/* notifications — hidden from tab bar, accessed via hamburger menu & bell icon */}
+        <Tabs.Screen name="notifications" options={{ href: null }} />
         {/* eod — hidden from tab bar, accessed via Operator button in header */}
         <Tabs.Screen name="eod"         options={{ href: null }} />
       </Tabs>

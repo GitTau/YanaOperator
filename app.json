@@ -23,7 +23,11 @@
         "foregroundImage": "./assets/adaptive-icon.png",
         "backgroundColor": "#F2F4F7"
       },
-      "package": "com.yana.operator"
+      "package": "com.yana.operator",
+      "permissions": [
+        "NOTIFICATIONS",
+        "POST_NOTIFICATIONS"
+      ]
     },
     "web": {
       "favicon": "./assets/favicon.png"
@@ -31,7 +35,14 @@
     "plugins": [
       "expo-router",
       "expo-font",
-      "expo-sharing"
+      "expo-sharing",
+      [
+        "expo-notifications",
+        {
+          "icon": "./assets/icon.png",
+          "color": "#06B6D4"
+        }
+      ]
     ],
     "extra": {
       "SUPABASE_URL": "https://kaoelfcaiegjjhyrrlak.supabase.co",

@@ -403,7 +403,7 @@ export function useActiveCycle() {
 
 /** Fetches the captain record for the currently selected store. */
 export function useCaptainByStore(storeId: string | null) {
-  return useQuery<{ id: string; name: string; store_id: string; zap_point: string | null } | null>({
+  return useQuery<{ id: string; name: string; store_id: string; zap_point: string | null; push_token: string | null } | null>({
     queryKey: queryKeys.captainByStore(storeId ?? ''),
     enabled: !!storeId,
     staleTime: 5 * 60 * 1000,
@@ -411,7 +411,7 @@ export function useCaptainByStore(storeId: string | null) {
       if (!storeId) return null;
       const { data, error } = await supabase
         .from('captains')
-        .select('id, name, store_id, zap_point')
+        .select('id, name, store_id, zap_point, push_token')
         .eq('store_id', storeId)
         .eq('status', 'active')
         .limit(1)
@@ -465,6 +465,39 @@ export function useMyWeeklyScores(captainId: string | null, cycleId: string | nu
         .order('week_number', { ascending: true });
       if (error) throw new Error(error.message);
       return (data as WeeklyScore[]) ?? [];
+    },
+  });
+}
+
+// ── Notification Types & Hooks ────────────────────────────────────────────────
+export interface NotificationItem {
+  id: string;
+  captain_id: string | null;
+  store_id: string | null;
+  title: string;
+  body: string;
+  type: string;
+  data: any;
+  is_read: boolean;
+  created_at: string;
+}
+
+/** Fetches notifications for a store/captain. Polled every 30s. */
+export function useMyNotifications(storeId: string | null, captainId: string | null) {
+  return useQuery<NotificationItem[]>({
+    queryKey: ['notifications', storeId ?? '', captainId ?? ''],
+    enabled: !!(storeId || captainId),
+    refetchInterval: POLL_INTERVAL,
+    queryFn: async () => {
+      let query = supabase.from('notifications').select('*').order('created_at', { ascending: false });
+      if (captainId) {
+        query = query.or(`captain_id.eq.${captainId},captain_id.is.null`);
+      } else if (storeId) {
+        query = query.eq('store_id', storeId);
+      }
+      const { data, error } = await query.limit(50);
+      if (error) throw new Error(error.message);
+      return (data as NotificationItem[]) ?? [];
     },
   });
 }

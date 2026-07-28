@@ -39,11 +39,15 @@ type MenuItemDef = {
 };
 
 const MENU_ITEMS: MenuItemDef[] = [
-  { id: 'maintenance', label: 'Maintenance',  icon: 'construct-outline',       route: '/(app)/maintenance' },
-  { id: 'performance', label: 'Performance',  icon: 'bar-chart-outline',       route: '/(app)/performance?segment=performance' },
-  { id: 'tasks',       label: 'Tasks',         icon: 'checkbox-outline',        route: '/(app)/performance?segment=tasks' },
-  { id: 'signout',     label: 'Sign Out',      icon: 'log-out-outline' },
+  { id: 'notifications', label: 'Notifications', icon: 'notifications-outline', route: '/(app)/notifications' },
+  { id: 'maintenance',   label: 'Maintenance',   icon: 'construct-outline',       route: '/(app)/maintenance' },
+  { id: 'performance',   label: 'Performance',   icon: 'bar-chart-outline',       route: '/(app)/performance?segment=performance' },
+  { id: 'tasks',         label: 'Tasks',         icon: 'checkbox-outline',        route: '/(app)/performance?segment=tasks' },
+  { id: 'signout',       label: 'Sign Out',      icon: 'log-out-outline' },
 ];
+
+import { useStoreSelectionStore } from '../stores/storeSelectionStore';
+import { useCaptainByStore, useMyNotifications } from '../hooks/useQueries';
 
 export function YanaHeader({ storeName, role, onSignOut, isEodTime = false }: YanaHeaderProps) {
   const insets = useSafeAreaInsets();
@@ -51,6 +55,13 @@ export function YanaHeader({ storeName, role, onSignOut, isEodTime = false }: Ya
   const fadeAnim = useRef(new Animated.Value(0)).current;
   // Pulsing glow animation for EOD button
   const pulseAnim = useRef(new Animated.Value(1)).current;
+
+  const { selectedStore } = useStoreSelectionStore();
+  const storeId = selectedStore?.store_id ?? null;
+  const { data: captain } = useCaptainByStore(storeId);
+  const captainId = captain?.id ?? null;
+  const { data: notifications } = useMyNotifications(storeId, captainId);
+  const unreadCount = notifications?.filter(n => !n.is_read).length ?? 0;
 
   useEffect(() => {
     if (!isEodTime) return;
@@ -131,6 +142,22 @@ export function YanaHeader({ storeName, role, onSignOut, isEodTime = false }: Ya
               </Text>
             </Pressable>
           </Animated.View>
+
+          {/* Notifications bell button */}
+          <Pressable
+            onPress={() => router.push('/(app)/notifications' as Parameters<typeof router.push>[0])}
+            style={({ pressed }) => [styles.iconBtn, { opacity: pressed ? 0.6 : 1, marginRight: 2 }]}
+            hitSlop={{ top: 12, bottom: 12, left: 12, right: 12 }}
+            accessibilityLabel="Notifications"
+            accessibilityRole="button"
+          >
+            <Ionicons name="notifications-outline" size={22} color={Colors.textSecondary} />
+            {unreadCount > 0 && (
+              <View style={styles.notifBadge}>
+                <Text style={styles.notifBadgeText}>{unreadCount > 9 ? '9+' : unreadCount}</Text>
+              </View>
+            )}
+          </Pressable>
 
           {/* Hamburger menu button */}
           <Pressable
@@ -381,5 +408,22 @@ const styles = StyleSheet.create({
     color: Colors.textSecondary,
     fontFamily: 'System',
     lineHeight: 14,
+  },
+  notifBadge: {
+    position: 'absolute',
+    top: 2,
+    right: 2,
+    backgroundColor: '#EF4444',
+    borderRadius: 8,
+    minWidth: 16,
+    height: 16,
+    justifyContent: 'center',
+    alignItems: 'center',
+    paddingHorizontal: 3,
+  },
+  notifBadgeText: {
+    color: '#FFFFFF',
+    fontSize: 9,
+    fontWeight: '800',
   },
 });
