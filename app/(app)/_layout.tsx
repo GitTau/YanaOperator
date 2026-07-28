@@ -8,7 +8,7 @@
 import { Tabs, router } from 'expo-router';
 import { Ionicons } from '@expo/vector-icons';
 import React, { useEffect } from 'react';
-import { Platform, Pressable, StyleSheet, Text, UIManager, View } from 'react-native';
+import { AppState, Platform, Pressable, StyleSheet, Text, UIManager, View } from 'react-native';
 import * as Notifications from 'expo-notifications';
 import Constants from 'expo-constants';
 
@@ -133,13 +133,12 @@ export default function AppLayout() {
       try {
         const token = await registerForPushNotificationsAsync();
         if (token) {
+          console.log('[PUSH] Push token resolved:', token);
           if (captainId) {
             await updateCaptainPushToken(captainId, token);
-            console.log(`Updated push token for captain ${captainId}`);
           }
           if (storeId) {
             await updateStoreCaptainsPushToken(storeId, token);
-            console.log(`Updated store captains push token for store ${storeId}`);
           }
         }
       } catch (err) {
@@ -148,6 +147,14 @@ export default function AppLayout() {
     }
 
     setupNotifications();
+
+    const appStateSub = AppState.addEventListener('change', (nextAppState) => {
+      if (nextAppState === 'active') {
+        setupNotifications();
+      }
+    });
+
+    return () => appStateSub.remove();
   }, [captainId, storeId]);
 
   useEffect(() => {

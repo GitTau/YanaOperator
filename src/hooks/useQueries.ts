@@ -486,16 +486,20 @@ export interface NotificationItem {
 export function useMyNotifications(storeId: string | null, captainId: string | null) {
   return useQuery<NotificationItem[]>({
     queryKey: ['notifications', storeId ?? '', captainId ?? ''],
-    enabled: !!(storeId || captainId),
+    enabled: true,
     refetchInterval: POLL_INTERVAL,
     queryFn: async () => {
-      let query = supabase.from('notifications').select('*').order('created_at', { ascending: false });
-      if (captainId) {
-        query = query.or(`captain_id.eq.${captainId},captain_id.is.null`);
-      } else if (storeId) {
-        query = query.eq('store_id', storeId);
-      }
-      const { data, error } = await query.limit(50);
+      const filters: string[] = ['captain_id.is.null', 'store_id.is.null'];
+      if (captainId) filters.push(`captain_id.eq.${captainId}`);
+      if (storeId) filters.push(`store_id.eq.${storeId}`);
+
+      const { data, error } = await supabase
+        .from('notifications')
+        .select('*')
+        .or(filters.join(','))
+        .order('created_at', { ascending: false })
+        .limit(50);
+
       if (error) throw new Error(error.message);
       return (data as NotificationItem[]) ?? [];
     },
