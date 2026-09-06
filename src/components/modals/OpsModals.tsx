@@ -24,6 +24,7 @@ import {
   pauseBooking,
   swapAssets,
   swapCharger,
+  updateVehicleStatus,
 } from '../../services/bookingService';
 import { Divider, YanaButton } from '../ui';
 
@@ -302,6 +303,7 @@ export function SwapModal({
           newChargerId: newCharger?.id ?? null,
         });
       } else {
+        const oldVehicleId = booking.vehicle_id;
         await swapAssets({
           p_booking_id: booking.id,
           p_store_id: storeId,
@@ -310,6 +312,14 @@ export function SwapModal({
           p_additional_fines: parseFloat(fines) || 0,
           p_operator_id: operatorId,
         });
+
+        if (swapType === 'vehicle' && hasVehicleIssues && oldVehicleId) {
+          try {
+            await updateVehicleStatus(oldVehicleId, 'Maintenance');
+          } catch (mErr) {
+            console.warn('[SwapModal] Failed to set old vehicle to Maintenance:', mErr);
+          }
+        }
       }
       handleClose();
       onSuccess();

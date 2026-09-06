@@ -31,7 +31,7 @@ import { Colors, Radius, Spacing, Typography } from '../../src/constants/design'
 import { YanaHeader } from '../../src/components/YanaHeader';
 import { useAuthStore } from '../../src/stores/authStore';
 import { useStoreSelectionStore } from '../../src/stores/storeSelectionStore';
-import { useIsEodTime, useCaptainByStore } from '../../src/hooks/useQueries';
+import { useIsEodTime, useCaptainByStore, useBookingsRealtime } from '../../src/hooks/useQueries';
 import { updateCaptainPushToken, updateStoreCaptainsPushToken } from '../../src/services/bookingService';
 
 type IoniconName = React.ComponentProps<typeof Ionicons>['name'];
@@ -125,6 +125,10 @@ export default function AppLayout() {
   const isEodTime = useIsEodTime();
 
   const storeId = selectedStore?.store_id ?? null;
+
+  // Bookings Realtime — one channel for the whole app session.
+  // Invalidates the bookings cache the instant admin edits anything.
+  useBookingsRealtime(storeId);
   const { data: captain } = useCaptainByStore(storeId);
   const captainId = captain?.id ?? null;
 
@@ -163,7 +167,7 @@ export default function AppLayout() {
       if (data?.segment === 'tasks') {
         router.push('/(app)/performance?segment=tasks');
       } else {
-        router.push('/(app)/notifications');
+        router.push('/(app)/notifications' as any);
       }
     });
     return () => subscription.remove();

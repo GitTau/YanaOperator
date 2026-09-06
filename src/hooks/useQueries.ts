@@ -4,8 +4,8 @@
 // Polling: 30s refetch interval matches polling architecture in ARCHITECTURE_OPS.md
 // ─────────────────────────────────────────────────────────────────────────────
 
-import React from 'react';
-import { useQuery } from '@tanstack/react-query';
+import React, { useEffect } from 'react';
+import { useQuery, useQueryClient } from '@tanstack/react-query';
 import { supabase } from '../lib/supabase';
 
 const POLL_INTERVAL = 30_000; // 30 seconds
@@ -122,6 +122,9 @@ export function useBookings(storeId: string | null) {
     queryKey: queryKeys.bookingsWithDetails(storeId ?? ''),
     enabled: !!storeId,
     refetchInterval: POLL_INTERVAL,
+    // Always re-fetch when a screen mounts — captures admin edits that happened
+    // while the app was in the background.
+    refetchOnMount: 'always',
     queryFn: async () => {
       const { data, error } = await supabase
         .from('bookings')
@@ -138,6 +141,40 @@ export function useBookings(storeId: string | null) {
       return data ?? [];
     },
   });
+}
+
+// ── Bookings Realtime subscription ──────────────────────────────────────────
+// Call this ONCE at the top-level layout (not inside each screen).
+// When admin edits any booking row for this store, the cache is invalidated
+// and all screens re-fetch automatically within 1–2 seconds.
+export function useBookingsRealtime(storeId: string | null) {
+  const queryClient = useQueryClient();
+
+  useEffect(() => {
+    if (!storeId) return;
+
+    const channel = supabase
+      .channel(`bookings-realtime-${storeId}`)
+      .on(
+        'postgres_changes',
+        {
+          event: '*',
+          schema: 'public',
+          table: 'bookings',
+          filter: `store_id=eq.${storeId}`,
+        },
+        () => {
+          queryClient.invalidateQueries({
+            queryKey: queryKeys.bookingsWithDetails(storeId),
+          });
+        },
+      )
+      .subscribe();
+
+    return () => {
+      supabase.removeChannel(channel);
+    };
+  }, [storeId, queryClient]);
 }
 
 // ── Maintenance Jobs ──────────────────────────────────────────────────────────
@@ -281,6 +318,65 @@ export function useOpenMaintenanceTickets(storeId: string | null) {
   });
 }
 // ── EOD Helpers ───────────────────────────────────────────────────────────────
+
+export interface TodayPaymentLog {
+  amount: number;
+  cashAmount: number;
+  onlineAmount: number;
+  timestamp: string;
+}
+
+export function useTodayPaymentLogs(storeId: string | null) {
+  return useQuery<TodayPaymentLog[]>({
+    queryKey: ['today_payment_logs', storeId ?? ''] as const,
+    enabled: !!storeId,
+    refetchInterval: POLL_INTERVAL,
+    queryFn: async () => {
+      if (!storeId) return [];
+
+      const now = new Date();
+      const istTime = new Date(now.getTime() + 5.5 * 60 * 60 * 1000);
+      const startOfDayIst = new Date(
+        Date.UTC(istTime.getUTCFullYear(), istTime.getUTCMonth(), istTime.getUTCDate(), 0, 0, 0) -
+          5.5 * 60 * 60 * 1000,
+      );
+
+      const { data, error } = await supabase
+        .from('audit_logs')
+        .select('message, reason, timestamp')
+        .eq('store_id', storeId)
+        .eq('type', 'BOOKING')
+        .gte('timestamp', startOfDayIst.toISOString())
+        .like('message', 'Payment of Rs.%');
+
+      if (error) {
+        console.warn('[useTodayPaymentLogs] Error:', error.message);
+        return [];
+      }
+
+      const results: TodayPaymentLog[] = [];
+      for (const row of data ?? []) {
+        const msgMatch = (row.message ?? '').match(/Payment of Rs\.(\d+(\.\d+)?)/);
+        const total = msgMatch ? parseFloat(msgMatch[1]) : 0;
+
+        const cashMatch = (row.reason ?? '').match(/Cash:\s*(\d+(\.\d+)?)/);
+        const cash = cashMatch ? parseFloat(cashMatch[1]) : 0;
+
+        const onlineMatch = (row.reason ?? '').match(/Online:\s*(\d+(\.\d+)?)/);
+        const online = onlineMatch ? parseFloat(onlineMatch[1]) : Math.max(0, total - cash);
+
+        results.push({
+          amount: total,
+          cashAmount: cash,
+          onlineAmount: online,
+          timestamp: row.timestamp,
+        });
+      }
+
+      return results;
+    },
+  });
+}
 
 /**
  * Returns true when the current IST time is at or past 22:00 (10 PM).

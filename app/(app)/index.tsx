@@ -27,7 +27,13 @@ import {
 } from '../../src/components/ui';
 import { useBookings, useGlobalConfig, useVehicles, queryKeys, useCaptainByStore, useMyTaskEntries } from '../../src/hooks/useQueries';
 import { useStoreSelectionStore } from '../../src/stores/storeSelectionStore';
-import { formatCurrency, calculatePaymentGate, parseLocalDate } from '../../src/services/bookingService';
+import {
+  formatCurrency,
+  calculatePaymentGate,
+  calculateOverdueFines,
+  getEffectiveEndDate,
+  parseLocalDate,
+} from '../../src/services/bookingService';
 import type { BookingWithDetails } from '../../src/lib/database.types';
 
 export default function OverviewScreen() {
@@ -102,24 +108,22 @@ export default function OverviewScreen() {
   
   const overdueBookings = (bookings as BookingWithDetails[] | undefined)?.filter((b) => {
     if (b.status !== 'Active') return false;
-    const endDate = b.end_date ? parseLocalDate(b.end_date) : null;
-    if (endDate) endDate.setHours(0, 0, 0, 0);
-    const endOverdue = endDate && endDate < today;
+    const effectiveEnd = getEffectiveEndDate(b.end_date, b.status, b.paused_at);
+    if (effectiveEnd) effectiveEnd.setHours(0, 0, 0, 0);
+    const endOverdue = effectiveEnd ? effectiveEnd < today : false;
 
-    let secondPartOverdue = false;
-    if (b.rental_plan === 'Monthly' && b.start_date) {
-      const startDate = parseLocalDate(b.start_date);
-      if (startDate) {
-        startDate.setHours(0, 0, 0, 0);
-        const secondPartDueDate = new Date(startDate);
-        secondPartDueDate.setDate(startDate.getDate() + 9);
-        if (today > secondPartDueDate && b.amount_paid < (b.total_amount + b.deposit_amount)) {
-          secondPartOverdue = true;
-        }
-      }
-    }
+    const { isSecondPartOverdue } = calculateOverdueFines(
+      b.rental_plan,
+      b.start_date,
+      b.end_date,
+      b.total_amount,
+      b.deposit_amount,
+      b.amount_paid,
+      b.status,
+      b.paused_at,
+    );
 
-    return endOverdue || secondPartOverdue;
+    return endOverdue || isSecondPartOverdue;
   }) ?? [];
 
   const targetRentals = selectedStore?.target_rentals ?? 10;

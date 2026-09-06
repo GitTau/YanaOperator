@@ -42,7 +42,8 @@ export function formatLocalDate(date: Date): string {
 }
 
 // ── Effective End Date (Accounts for live pause extensions) ────────────────────
-// For Paused bookings, each day that passes past midnight increments the end date by 1 day.
+// For Paused bookings, pausing immediately adds +1 day extension on the pause day,
+// plus +1 day for each additional calendar day it remains paused.
 export function getEffectiveEndDate(
   endDateStr: string | null | undefined,
   status: string | null | undefined,
@@ -60,9 +61,8 @@ export function getEffectiveEndDate(
       const diffTime = todayDate.getTime() - pauseStartDate.getTime();
       const diffDays = Math.max(0, Math.floor(diffTime / (1000 * 60 * 60 * 24)));
 
-      if (diffDays > 0) {
-        baseEnd.setDate(baseEnd.getDate() + diffDays);
-      }
+      // Pause immediately adds +1 day extension minimum, +1 for each day passed
+      baseEnd.setDate(baseEnd.getDate() + diffDays + 1);
     }
   }
 
@@ -137,9 +137,12 @@ export function calculateOverdueFines(
     secondPartDueDateStr = formatLocalDate(secondPartDueDate);
 
     if (today > secondPartDueDate) {
-      isSecondPartOverdue = true;
-      // Only charge 2nd part fine if they haven't paid the base rent + deposit
-      if ((totalAmount + depositAmount - amountPaid) > 1.0) {
+      // The 2nd-part fine is a penalty for not paying the RENT on time.
+      // The security deposit is a separate held amount — do NOT include it here.
+      // Only flag overdue if the rent itself (totalAmount) is not yet fully paid.
+      const rentOutstanding = totalAmount - amountPaid;
+      if (rentOutstanding > 1.0) {
+        isSecondPartOverdue = true;
         const diffTime = today.getTime() - secondPartDueDate.getTime();
         const daysLate2ndPart = Math.floor(diffTime / (1000 * 60 * 60 * 24));
         if (daysLate2ndPart >= 2) {
@@ -243,6 +246,19 @@ export function calculatePricing(
 export async function createBooking(
   params: CreateBookingParams & { start_date?: string; end_date?: string; charger_id?: string | null }
 ): Promise<string> {
+  // Pre-check if rider already has an active, draft, or paused booking
+  const { data: existingBookings, error: checkError } = await supabase
+    .from('bookings')
+    .select('id, status')
+    .eq('customer_id', params.p_customer_id)
+    .in('status', ['Draft', 'Active', 'Paused']);
+
+  if (checkError) {
+    console.warn('[createBooking] Pre-check failed:', checkError.message);
+  } else if (existingBookings && existingBookings.length > 0) {
+    throw new Error('Rider already has an active or pending rental booking.');
+  }
+
   const { start_date, end_date, charger_id, ...rpcParams } = params;
   const { data, error } = await supabase.rpc('create_booking', rpcParams);
   if (error) throw new Error(`Create booking failed: ${error.message}`);
@@ -608,7 +624,7 @@ export async function dispatchBooking(
   // Fetch current booking state to see if it is a Resume from Pause or first Dispatch of Draft
   const { data: booking, error: fetchError } = await supabase
     .from('bookings')
-    .select('status, paused_at, end_date, rental_plan, charger_id')
+    .select('status, paused_at, start_date, end_date, rental_plan, charger_id')
     .eq('id', bookingId)
     .single();
 
@@ -658,13 +674,16 @@ export async function dispatchBooking(
     started_at: now.toISOString(),
   };
 
-  // If dispatching a Draft for the first time, align start_date to dispatch day & calculate end_date
+  // If dispatching a Draft for the first time, keep chosen start_date and end_date if set.
+  // Only fallback to today's date if start_date was not provided.
   if (booking && booking.status === 'Draft') {
-    const todayStr = formatLocalDate(now);
-    const planDays = booking.rental_plan === 'Monthly' ? 29 : 6;
-    const endDateObj = new Date(now.getFullYear(), now.getMonth(), now.getDate() + planDays);
-    updatedFields.start_date = todayStr;
-    updatedFields.end_date = formatLocalDate(endDateObj);
+    if (!booking.start_date) {
+      const todayStr = formatLocalDate(now);
+      const planDays = booking.rental_plan === 'Monthly' ? 29 : 6;
+      const endDateObj = new Date(now.getFullYear(), now.getMonth(), now.getDate() + planDays);
+      updatedFields.start_date = todayStr;
+      updatedFields.end_date = formatLocalDate(endDateObj);
+    }
   }
 
   // If unpausing, calculate effective end date with accumulated pause days and clear pause timestamp

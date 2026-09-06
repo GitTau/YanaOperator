@@ -44,7 +44,13 @@ export default function PaymentsScreen() {
           b.status,
           b.paused_at,
         );
-        const balance = Math.max(0, gate.gateAmount - b.amount_paid);
+
+        const totalFines = b.fines_amount + gate.overdueFine;
+        const totalOwed = b.total_amount + b.deposit_amount + totalFines;
+        const totalBalance = Math.max(0, totalOwed - b.amount_paid);
+        const gateBalance = Math.max(0, gate.gateAmount - b.amount_paid);
+        // If gate not cleared, show gate amount required; otherwise show full remaining subscription balance
+        const displayBalance = !gate.isCleared ? gateBalance : totalBalance;
 
         const endDate = getEffectiveEndDate(b.end_date, b.status, b.paused_at);
         if (endDate) endDate.setHours(0, 0, 0, 0);
@@ -62,18 +68,19 @@ export default function PaymentsScreen() {
           }
         }
 
-        return { booking: b, gate, balance, daysLate };
+        return { booking: b, gate, totalBalance, gateBalance, displayBalance, daysLate };
       })
+      .filter((item) => item.displayBalance > 0 || !item.gate.isCleared || item.daysLate > 0)
       .sort((a, b) => {
         if (a.daysLate !== b.daysLate) return b.daysLate - a.daysLate;
         if (!a.gate.isCleared && b.gate.isCleared) return -1;
         if (a.gate.isCleared && !b.gate.isCleared) return 1;
         if (a.booking.rental_plan !== b.booking.rental_plan) return a.booking.rental_plan === 'Monthly' ? -1 : 1;
-        return 0;
+        return b.displayBalance - a.displayBalance;
       });
   }, [bookings]);
 
-  const totalPending   = paymentQueue.reduce((s, q) => s + Math.max(0, q.balance), 0);
+  const totalPending = paymentQueue.reduce((s, q) => s + q.displayBalance, 0);
   const totalCollected = (bookings as BookingWithDetails[] | undefined)?.reduce((s, b) => s + b.amount_paid, 0) ?? 0;
 
   const invalidate = () => queryClient.invalidateQueries({ queryKey: queryKeys.bookingsWithDetails(storeId ?? '') });
@@ -126,7 +133,7 @@ export default function PaymentsScreen() {
           showsVerticalScrollIndicator={false}
           refreshControl={<RefreshControl refreshing={isLoading} onRefresh={invalidate} tintColor={Colors.brandTeal} />}
           ListEmptyComponent={<EmptyState message="All payments cleared." sub="Great work today." />}
-          renderItem={({ item: { booking, gate, balance, daysLate } }) => (
+          renderItem={({ item: { booking, gate, totalBalance, displayBalance, daysLate } }) => (
             <View style={[styles.paymentRow, daysLate > 0 && styles.paymentRowOverdue]}>
               {/* Icon */}
               <View style={styles.rupeeIcon}>
@@ -154,17 +161,25 @@ export default function PaymentsScreen() {
                     </View>
                   )}
                 </View>
-                {!gate.isCleared && (
+                {!gate.isCleared ? (
                   <Text style={[Typography.caption, { color: Colors.statusError, marginTop: 2, fontWeight: '600' }]}>
-                    100% ADV. REQD
+                    {booking.rental_plan === 'Weekly' ? '100% ADV. REQD' : 'MIN ₹4,000 ADV. REQD'}
                   </Text>
-                )}
+                ) : gate.isSecondPartOverdue ? (
+                  <Text style={[Typography.caption, { color: Colors.statusError, marginTop: 2, fontWeight: '600' }]}>
+                    2ND PART OVERDUE
+                  </Text>
+                ) : totalBalance > 0 ? (
+                  <Text style={[Typography.caption, { color: Colors.statusWarning, marginTop: 2, fontWeight: '600' }]}>
+                    GATE CLEARED · BAL DUE
+                  </Text>
+                ) : null}
               </View>
 
               {/* Amount + action */}
               <View style={styles.paymentRight}>
                 <Text style={[Typography.bodyPrimary, { fontWeight: '800', color: Colors.textOrange }]}>
-                  {formatCurrency(balance)}
+                  {formatCurrency(displayBalance)}
                 </Text>
                 <Pressable
                   style={({ pressed }) => [styles.actionBtn, { opacity: pressed ? 0.7 : 1 }]}

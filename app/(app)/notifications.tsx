@@ -99,8 +99,8 @@ export default function NotificationsScreen() {
   const renderItem = ({ item }: { item: NotificationItem }) => {
     const isUnread = !item.is_read;
     let iconName: React.ComponentProps<typeof Ionicons>['name'] = 'notifications-outline';
-    let iconBg = Colors.surfaceTeal;
-    let iconColor = Colors.brandTealDim;
+    let iconBg: string = Colors.surfaceTeal;
+    let iconColor: string = Colors.brandTealDim;
 
     if (item.type === 'task') {
       iconName = 'checkbox-outline';
@@ -274,7 +274,7 @@ const styles = StyleSheet.create({
     alignItems: 'center',
   },
   headerTitle: {
-    ...Typography.subtitle,
+    ...Typography.bodyPrimary,
     fontSize: 16,
     fontWeight: '700',
     color: Colors.textPrimary,

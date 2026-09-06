@@ -113,12 +113,36 @@ export function ChecklistModal({
   const setItemState = (key: string, state: ItemState) =>
     setStates(prev => ({ ...prev, [key]: prev[key] === state ? null : state }));
 
-  const handleSubmit = () => {
+  const handleSubmit = async () => {
     if (hasIssues || hasDamage) {
       setShowRaiseTicket(true);
     } else {
-      onComplete(false, 0);
-      handleClose();
+      if (submitting || !booking) return;
+      setSubmitting(true);
+      try {
+        const itemStatesStrings: Record<string, string> = {};
+        for (const [k, v] of Object.entries(states)) {
+          if (v) itemStatesStrings[k] = v;
+        }
+
+        const { profile } = useAuthStore.getState();
+        await saveVehicleChecklist({
+          vehicleId:   booking.vehicle_id,
+          storeId:     booking.store_id,
+          bookingId:   booking.id,
+          flow:        checklistType === 'vehicle_swap' ? 'return' : checklistType,
+          itemStates:  itemStatesStrings,
+          itemNotes:   notes,
+          submittedBy: profile?.id ?? null,
+        });
+
+        onComplete(false, 0);
+        handleClose();
+      } catch (err) {
+        Alert.alert('Error', err instanceof Error ? err.message : 'Failed to save checklist');
+      } finally {
+        setSubmitting(false);
+      }
     }
   };
 
@@ -521,15 +545,25 @@ export function ChecklistModal({
           <Pressable
             style={({ pressed }) => [
               styles.submitBtn,
-              !canSubmit && styles.submitBtnDisabled,
-              { transform: [{ scale: pressed && canSubmit ? 0.96 : 1 }] },
+              (!canSubmit || submitting) && styles.submitBtnDisabled,
+              { transform: [{ scale: pressed && canSubmit && !submitting ? 0.96 : 1 }] },
             ]}
             onPress={handleSubmit}
-            disabled={!canSubmit}
+            disabled={!canSubmit || submitting}
           >
-            <Ionicons name="checkmark-circle-outline" size={16} color="#fff" style={{ marginRight: 6 }} />
+            {submitting ? (
+              <ActivityIndicator size="small" color="#fff" style={{ marginRight: 6 }} />
+            ) : (
+              <Ionicons name="checkmark-circle-outline" size={16} color="#fff" style={{ marginRight: 6 }} />
+            )}
             <Text style={styles.submitBtnText}>
-              {checklistType === 'return' ? 'Confirm Return' : 'Confirm Pause'}
+              {submitting
+                ? 'Saving...'
+                : checklistType === 'return'
+                ? 'Confirm Return'
+                : checklistType === 'vehicle_swap'
+                ? 'Confirm Swap Check'
+                : 'Confirm Pause'}
             </Text>
           </Pressable>
         </View>

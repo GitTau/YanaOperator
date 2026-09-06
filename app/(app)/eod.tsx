@@ -39,6 +39,7 @@ import {
   useVehicles,
   useIsEodTime,
   useMaintenanceJobs,
+  useTodayPaymentLogs,
 } from '../../src/hooks/useQueries';
 import { useStoreSelectionStore } from '../../src/stores/storeSelectionStore';
 import { calculatePaymentGate, parseLocalDate, getEffectiveEndDateStr } from '../../src/services/bookingService';
@@ -116,13 +117,15 @@ export default function EodReportScreen() {
   const { data: bookings, isLoading: bLoading, refetch: refetchB } = useBookings(storeId);
   const { data: vehicles, isLoading: vLoading, refetch: refetchV } = useVehicles(storeId);
   const { data: maintJobs, isLoading: mLoading, refetch: refetchM } = useMaintenanceJobs(storeId);
+  const { data: todayLogs, isLoading: pLoading, refetch: refetchP } = useTodayPaymentLogs(storeId);
 
-  const isLoading = bLoading || vLoading || mLoading;
+  const isLoading = bLoading || vLoading || mLoading || pLoading;
 
   const onRefresh = () => {
     void refetchB();
     void refetchV();
     void refetchM();
+    void refetchP();
   };
 
   // ── Compute KPIs ─────────────────────────────────────────────────────────────
@@ -133,16 +136,20 @@ export default function EodReportScreen() {
 
     const totalActiveRentals = bList.filter(b => b.status === 'Active').length;
 
-    // Revenue = rent collected only — deposit portion excluded.
-    // deposit_collected = min(amount_paid, deposit_amount)
-    // rental_revenue    = amount_paid - deposit_collected
-    const totalRevenueCollectedToday = bList
-      .filter(b => isSameIstDay(b.started_at) || isSameIstDay(b.created_at))
-      .reduce((s, b) => {
-        const paid = b.amount_paid || 0;
-        const depositCollected = Math.min(paid, b.deposit_amount || 0);
-        return s + (paid - depositCollected);
-      }, 0);
+    // Payments recorded today from audit_logs transactional records
+    const auditLogsTotalPaid = (todayLogs ?? []).reduce((s, l) => s + l.amount, 0);
+    const auditLogsCash = (todayLogs ?? []).reduce((s, l) => s + l.cashAmount, 0);
+
+    // Revenue collected today: uses audit logs if available, fallback to legacy booking created/started
+    const totalRevenueCollectedToday = (todayLogs && todayLogs.length > 0)
+      ? auditLogsTotalPaid
+      : bList
+          .filter(b => isSameIstDay(b.started_at) || isSameIstDay(b.created_at))
+          .reduce((s, b) => {
+            const paid = b.amount_paid || 0;
+            const depositCollected = Math.min(paid, b.deposit_amount || 0);
+            return s + (paid - depositCollected);
+          }, 0);
 
     // Renewals: started today but created on a prior day
     const totalRenewalsToday = bList.filter(b =>
@@ -153,11 +160,12 @@ export default function EodReportScreen() {
 
     const totalNewBookingsToday = bList.filter(b => isSameIstDay(b.created_at)).length;
 
-    // Cash received = amount_paid_cash — exactly what the operator types
-    // in the cash box during payment collection. No adjustment needed.
-    const totalCashReceivedToday = bList
-      .filter(b => isSameIstDay(b.started_at) || isSameIstDay(b.created_at))
-      .reduce((s, b) => s + (b.amount_paid_cash || 0), 0);
+    // Cash received today: uses audit logs if available, fallback to legacy booking created/started
+    const totalCashReceivedToday = (todayLogs && todayLogs.length > 0)
+      ? auditLogsCash
+      : bList
+          .filter(b => isSameIstDay(b.started_at) || isSameIstDay(b.created_at))
+          .reduce((s, b) => s + (b.amount_paid_cash || 0), 0);
 
     const totalRidersOnPause = bList.filter(b => b.status === 'Paused').length;
 
