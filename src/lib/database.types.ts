@@ -210,6 +210,19 @@ export interface AuditLog {
   timestamp: string;
 }
 
+// ── notifications ────────────────────────────────────────────────────────────
+export interface AppNotification {
+  id: string;
+  store_id: string | null;
+  captain_id: string | null;
+  title: string;
+  body: string;
+  type: string;
+  is_read: boolean;
+  data: Record<string, any> | null;
+  created_at: string | null;
+}
+
 // ── RPC parameters ───────────────────────────────────────────────────────────
 export interface CreateBookingParams {
   p_customer_id: string;
@@ -221,6 +234,18 @@ export interface CreateBookingParams {
   p_deposit_amount: number;
   p_amount_paid: number;
   p_operator_id: string;
+  p_status?: BookingStatus;
+  p_start_date?: string | null;
+  p_end_date?: string | null;
+  p_charger_id?: string | null;
+}
+
+export interface DispatchBookingParams {
+  p_booking_id: string;
+  p_vehicle_id: string;
+  p_battery_id: string;
+  p_charger_id?: string | null;
+  p_operator_id?: string | null;
 }
 
 export interface RecordPaymentParams {
@@ -256,10 +281,12 @@ export interface Database {
       vehicle_checklists: { Row: VehicleChecklist; Insert: Omit<VehicleChecklist, 'id' | 'submitted_at'>; Update: Partial<VehicleChecklist>; Relationships: [] };
       global_config: { Row: GlobalConfig; Insert: Omit<GlobalConfig, 'updated_at'>; Update: Partial<GlobalConfig>; Relationships: [] };
       audit_logs: { Row: AuditLog; Insert: Omit<AuditLog, 'id' | 'timestamp'>; Update: Partial<AuditLog>; Relationships: [] };
+      notifications: { Row: AppNotification; Insert: Omit<AppNotification, 'id' | 'created_at'>; Update: Partial<AppNotification>; Relationships: [] };
     };
     Views: Record<string, never>;
     Functions: {
       create_booking: { Args: CreateBookingParams; Returns: string };
+      dispatch_booking: { Args: DispatchBookingParams; Returns: void };
       record_payment: { Args: RecordPaymentParams; Returns: void };
       swap_assets: { Args: SwapAssetsParams; Returns: void };
       current_role: { Args: Record<string, never>; Returns: UserRole };

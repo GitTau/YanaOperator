@@ -246,75 +246,18 @@ export function calculatePricing(
 export async function createBooking(
   params: CreateBookingParams & { start_date?: string; end_date?: string; charger_id?: string | null }
 ): Promise<string> {
-  // Pre-check if rider already has an active, draft, or paused booking
-  const { data: existingBookings, error: checkError } = await supabase
-    .from('bookings')
-    .select('id, status')
-    .eq('customer_id', params.p_customer_id)
-    .in('status', ['Draft', 'Active', 'Paused']);
-
-  if (checkError) {
-    console.warn('[createBooking] Pre-check failed:', checkError.message);
-  } else if (existingBookings && existingBookings.length > 0) {
-    throw new Error('Rider already has an active or pending rental booking.');
-  }
-
   const { start_date, end_date, charger_id, ...rpcParams } = params;
-  const { data, error } = await supabase.rpc('create_booking', rpcParams);
+
+  const { data, error } = await supabase.rpc('create_booking', {
+    ...rpcParams,
+    p_status: 'Draft',
+    p_start_date: start_date || null,
+    p_end_date: end_date || null,
+    p_charger_id: charger_id || null,
+  });
+
   if (error) throw new Error(`Create booking failed: ${error.message}`);
-
-  const bookingId = data as string;
-
-  // The create_booking RPC marks the booking as 'Active' immediately,
-  // but it must start as 'Draft' until physical dispatch occurs.
-  // Reset it back to 'Draft' and clear started_at.
-  const { error: bookingResetError } = await supabase
-    .from('bookings')
-    .update({
-      status: 'Draft',
-      started_at: null,
-      start_date: start_date || null,
-      end_date: end_date || null,
-      charger_id: charger_id || null,
-    })
-    .eq('id', bookingId);
-  if (bookingResetError) throw new Error(`[createBooking] Failed to reset booking to Draft: ${bookingResetError.message}`);
-
-  // The create_booking RPC marks vehicle + battery as 'In Use' immediately,
-  // but assets must only be locked on Dispatch (when payment gate is cleared).
-  // Release them back to Available now — dispatchBooking will re-lock on dispatch.
-  const { error: vehicleResetError } = await supabase
-    .from('vehicles')
-    .update({ status: 'Available', assigned_battery_id: null })
-    .eq('id', params.p_vehicle_id);
-  if (vehicleResetError) throw new Error(`[createBooking] Failed to release vehicle: ${vehicleResetError.message}`);
-
-  const { error: batteryResetError } = await supabase
-    .from('batteries')
-    .update({ status: 'Available', assigned_vehicle_id: null })
-    .eq('id', params.p_battery_id);
-  if (batteryResetError) throw new Error(`[createBooking] Failed to release battery: ${batteryResetError.message}`);
-
-  if (charger_id) {
-    const { error: chargerResetError } = await supabase
-      .from('chargers')
-      .update({ status: 'Available', assigned_vehicle_id: null })
-      .eq('id', charger_id);
-    if (chargerResetError) throw new Error(`[createBooking] Failed to release charger: ${chargerResetError.message}`);
-  }
-
-  if (start_date && end_date) {
-    const { error: customerError } = await supabase
-      .from('customers')
-      .update({ start_date, end_date })
-      .eq('id', params.p_customer_id);
-
-    if (customerError) {
-      console.error('Failed to update customer rental dates:', customerError.message);
-    }
-  }
-
-  return bookingId;
+  return data as string;
 }
 
 // ── record_payment RPC ────────────────────────────────────────────────────────
@@ -614,112 +557,23 @@ export async function renewBooking(params: RenewBookingParams): Promise<string> 
 }
 
 
-// ── Dispatch booking (Draft → Active) ─────────────────────────────────────────
+// ── Dispatch booking (Draft / Paused → Active) ────────────────────────────────
 export async function dispatchBooking(
   bookingId: string,
   vehicleId: string,
   batteryId: string,
   chargerId?: string | null,
+  operatorId?: string | null,
 ): Promise<void> {
-  // Fetch current booking state to see if it is a Resume from Pause or first Dispatch of Draft
-  const { data: booking, error: fetchError } = await supabase
-    .from('bookings')
-    .select('status, paused_at, start_date, end_date, rental_plan, charger_id')
-    .eq('id', bookingId)
-    .single();
+  const { error } = await supabase.rpc('dispatch_booking', {
+    p_booking_id: bookingId,
+    p_vehicle_id: vehicleId,
+    p_battery_id: batteryId,
+    p_charger_id: chargerId || null,
+    p_operator_id: operatorId || null,
+  });
 
-  if (fetchError) {
-    throw new Error(`Failed to fetch booking details before dispatch: ${fetchError.message}`);
-  }
-
-  const activeChargerId = chargerId ?? booking?.charger_id ?? null;
-
-  // If resuming from Pause, verify that the assets are currently Available
-  if (booking && booking.status === 'Paused') {
-    if (vehicleId) {
-      const { data: vehicle } = await supabase
-        .from('vehicles')
-        .select('status, plate_number')
-        .eq('id', vehicleId)
-        .single();
-      if (vehicle && vehicle.status !== 'Available') {
-        throw new Error(`Vehicle ${vehicle.plate_number || ''} is currently ${vehicle.status}. Please swap the vehicle first before resuming.`);
-      }
-    }
-    if (batteryId) {
-      const { data: battery } = await supabase
-        .from('batteries')
-        .select('status, serial_number')
-        .eq('id', batteryId)
-        .single();
-      if (battery && battery.status !== 'Available') {
-        throw new Error(`Battery ${battery.serial_number || ''} is currently ${battery.status}. Please swap the battery first before resuming.`);
-      }
-    }
-    if (activeChargerId) {
-      const { data: charger } = await supabase
-        .from('chargers')
-        .select('status, serial_number')
-        .eq('id', activeChargerId)
-        .single();
-      if (charger && charger.status !== 'Available') {
-        throw new Error(`Charger ${charger.serial_number || ''} is currently ${charger.status}. Please swap the charger first before resuming.`);
-      }
-    }
-  }
-
-  const now = new Date();
-  const updatedFields: Record<string, any> = {
-    status: 'Active',
-    started_at: now.toISOString(),
-  };
-
-  // If dispatching a Draft for the first time, keep chosen start_date and end_date if set.
-  // Only fallback to today's date if start_date was not provided.
-  if (booking && booking.status === 'Draft') {
-    if (!booking.start_date) {
-      const todayStr = formatLocalDate(now);
-      const planDays = booking.rental_plan === 'Monthly' ? 29 : 6;
-      const endDateObj = new Date(now.getFullYear(), now.getMonth(), now.getDate() + planDays);
-      updatedFields.start_date = todayStr;
-      updatedFields.end_date = formatLocalDate(endDateObj);
-    }
-  }
-
-  // If unpausing, calculate effective end date with accumulated pause days and clear pause timestamp
-  if (booking && booking.status === 'Paused' && booking.paused_at) {
-    const effectiveEndDateStr = getEffectiveEndDateStr(booking.end_date, 'Paused', booking.paused_at);
-    updatedFields.paused_at = null; // Clear pause timestamp
-    if (effectiveEndDateStr) {
-      updatedFields.end_date = effectiveEndDateStr;
-    }
-  }
-
-  const { error } = await supabase
-    .from('bookings')
-    .update(updatedFields)
-    .eq('id', bookingId);
   if (error) throw new Error(`Dispatch failed: ${error.message}`);
-
-  const { error: vehicleError } = await supabase
-    .from('vehicles')
-    .update({ status: 'In Use', assigned_battery_id: batteryId })
-    .eq('id', vehicleId);
-  if (vehicleError) throw new Error(`Vehicle status update failed: ${vehicleError.message}`);
-
-  const { error: batteryError } = await supabase
-    .from('batteries')
-    .update({ status: 'In Use', assigned_vehicle_id: vehicleId })
-    .eq('id', batteryId);
-  if (batteryError) throw new Error(`Battery status update failed: ${batteryError.message}`);
-
-  if (activeChargerId) {
-    const { error: chargerError } = await supabase
-      .from('chargers')
-      .update({ status: 'In Use', assigned_vehicle_id: vehicleId })
-      .eq('id', activeChargerId);
-    if (chargerError) throw new Error(`Charger status update failed: ${chargerError.message}`);
-  }
 }
 
 // ── Create customer (Rider) ───────────────────────────────────────────────────
