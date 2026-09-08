@@ -39,6 +39,7 @@ type MenuItemDef = {
 };
 
 const MENU_ITEMS: MenuItemDef[] = [
+  { id: 'profile',       label: 'My Profile',    icon: 'person-circle-outline',   route: '/(app)/profile' },
   { id: 'notifications', label: 'Notifications', icon: 'notifications-outline', route: '/(app)/notifications' },
   { id: 'maintenance',   label: 'Maintenance',   icon: 'construct-outline',       route: '/(app)/maintenance' },
   { id: 'performance',   label: 'Performance',   icon: 'bar-chart-outline',       route: '/(app)/performance?segment=performance' },

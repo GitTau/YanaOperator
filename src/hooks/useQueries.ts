@@ -6,6 +6,7 @@
 
 import React, { useEffect } from 'react';
 import { useQuery, useQueryClient } from '@tanstack/react-query';
+import type { Captain } from '../lib/database.types';
 import { supabase } from '../lib/supabase';
 
 const POLL_INTERVAL = 30_000; // 30 seconds
@@ -499,7 +500,7 @@ export function useActiveCycle() {
 
 /** Fetches the captain record for the currently selected store. */
 export function useCaptainByStore(storeId: string | null) {
-  return useQuery<{ id: string; name: string; store_id: string; zap_point: string | null; push_token: string | null } | null>({
+  return useQuery<Captain | null>({
     queryKey: queryKeys.captainByStore(storeId ?? ''),
     enabled: !!storeId,
     staleTime: 5 * 60 * 1000,
@@ -507,13 +508,13 @@ export function useCaptainByStore(storeId: string | null) {
       if (!storeId) return null;
       const { data, error } = await supabase
         .from('captains')
-        .select('id, name, store_id, zap_point, push_token')
+        .select('*')
         .eq('store_id', storeId)
         .eq('status', 'active')
         .limit(1)
         .maybeSingle();
       if (error) throw new Error(error.message);
-      return data ?? null;
+      return (data as Captain) ?? null;
     },
   });
 }

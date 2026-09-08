@@ -23,7 +23,7 @@ import { useAuthStore } from '../../src/stores/authStore';
 import { YanaLogo } from '../../src/components/YanaLogo';
 
 export default function LoginScreen() {
-  const [email, setEmail] = useState('');
+  const [identifier, setIdentifier] = useState('');
   const [password, setPassword] = useState('');
   const [showPassword, setShowPassword] = useState(false);
 
@@ -35,8 +35,8 @@ export default function LoginScreen() {
   }, [isAuthenticated]);
 
   const handleSignIn = async () => {
-    if (!email.trim() || !password) return;
-    await signIn(email.trim(), password);
+    if (!identifier.trim() || !password) return;
+    await signIn(identifier.trim(), password);
   };
 
   return (
@@ -73,18 +73,18 @@ export default function LoginScreen() {
             )}
 
             <View style={styles.field}>
-              <Text style={[Typography.labelCaps, styles.fieldLabel]}>EMAIL</Text>
+              <Text style={[Typography.labelCaps, styles.fieldLabel]}>OPERATOR ID / EMAIL</Text>
               <TextInput
                 style={styles.input}
-                value={email}
-                onChangeText={(t) => { setEmail(t); clearError(); }}
-                placeholder="captain@yana.in"
+                value={identifier}
+                onChangeText={(t) => { setIdentifier(t); clearError(); }}
+                placeholder="e.g. cap-od02 or email"
                 placeholderTextColor={Colors.textSecondary}
-                keyboardType="email-address"
+                keyboardType="default"
                 autoCapitalize="none"
                 autoCorrect={false}
-                textContentType="emailAddress"
-                accessibilityLabel="Email address"
+                textContentType="username"
+                accessibilityLabel="Operator ID or email address"
               />
             </View>
 

@@ -33,6 +33,22 @@ export interface Profile {
   id: string; // matches auth.users.id
   role: UserRole;
   store_id: string | null;
+  captain_id?: string | null;
+  created_at: string;
+}
+
+// ── captains (ground operators) ──────────────────────────────────────────────
+export interface Captain {
+  id: string;
+  name: string;
+  store_id: string | null;
+  zap_point: string | null;
+  login_id: string | null;
+  auth_user_id: string | null;
+  phone: string | null;
+  joined_date: string;
+  status: string;
+  push_token: string | null;
   created_at: string;
 }
 
@@ -271,6 +287,7 @@ export interface Database {
     Tables: {
       stores: { Row: Store; Insert: Omit<Store, 'store_id' | 'created_at'>; Update: Partial<Store>; Relationships: [] };
       profiles: { Row: Profile; Insert: Omit<Profile, 'created_at'>; Update: Partial<Profile>; Relationships: [] };
+      captains: { Row: Captain; Insert: Partial<Captain>; Update: Partial<Captain>; Relationships: [] };
       vehicles: { Row: Vehicle; Insert: Omit<Vehicle, 'id' | 'created_at'>; Update: Partial<Vehicle>; Relationships: [] };
       batteries: { Row: Battery; Insert: Omit<Battery, 'id' | 'created_at'>; Update: Partial<Battery>; Relationships: [] };
       chargers: { Row: Charger; Insert: Omit<Charger, 'id' | 'created_at'>; Update: Partial<Charger>; Relationships: [] };
