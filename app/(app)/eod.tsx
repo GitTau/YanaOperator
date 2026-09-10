@@ -20,18 +20,20 @@
 
 import { Ionicons } from '@expo/vector-icons';
 import { router } from 'expo-router';
-import React, { useMemo } from 'react';
+import React, { useMemo, useState } from 'react';
 import {
+  ActivityIndicator,
   Alert,
   RefreshControl,
   SafeAreaView,
   ScrollView,
-  Share,
   StyleSheet,
   Text,
   View,
   Pressable,
 } from 'react-native';
+import * as Print from 'expo-print';
+import * as Sharing from 'expo-sharing';
 import { Colors, Radius, Spacing, Typography } from '../../src/constants/design';
 import { SkeletonCard } from '../../src/components/ui';
 import {
@@ -40,8 +42,10 @@ import {
   useIsEodTime,
   useMaintenanceJobs,
   useTodayPaymentLogs,
+  useCaptainByStore,
 } from '../../src/hooks/useQueries';
 import { useStoreSelectionStore } from '../../src/stores/storeSelectionStore';
+import { useAuthStore } from '../../src/stores/authStore';
 import { calculatePaymentGate, parseLocalDate, getEffectiveEndDateStr } from '../../src/services/bookingService';
 import type { BookingWithDetails } from '../../src/lib/database.types';
 
@@ -113,6 +117,11 @@ export default function EodReportScreen() {
   const { selectedStore } = useStoreSelectionStore();
   const storeId = selectedStore?.store_id ?? null;
   const isEodTime = useIsEodTime();
+  const { user } = useAuthStore();
+  const { data: captain } = useCaptainByStore(storeId);
+  const operatorName = captain?.name || user?.phone || 'Captain';
+
+  const [generatingPdf, setGeneratingPdf] = useState(false);
 
   const { data: bookings, isLoading: bLoading, refetch: refetchB } = useBookings(storeId);
   const { data: vehicles, isLoading: vLoading, refetch: refetchV } = useVehicles(storeId);
@@ -133,60 +142,96 @@ export default function EodReportScreen() {
     const bList = (bookings as BookingWithDetails[] | undefined) ?? [];
     const vList = (vehicles as { id: string; status: string }[] | undefined) ?? [];
     const mList = (maintJobs as { created_at: string; status: string }[] | undefined) ?? [];
+    const pLogs = todayLogs ?? [];
 
     const totalActiveRentals = bList.filter(b => b.status === 'Active').length;
-
-    // Payments recorded today from audit_logs transactional records
-    const auditLogsTotalPaid = (todayLogs ?? []).reduce((s, l) => s + l.amount, 0);
-    const auditLogsCash = (todayLogs ?? []).reduce((s, l) => s + l.cashAmount, 0);
-
-    // Revenue collected today: uses audit logs if available, fallback to legacy booking created/started
-    const totalRevenueCollectedToday = (todayLogs && todayLogs.length > 0)
-      ? auditLogsTotalPaid
-      : bList
-          .filter(b => isSameIstDay(b.started_at) || isSameIstDay(b.created_at))
-          .reduce((s, b) => {
-            const paid = b.amount_paid || 0;
-            const depositCollected = Math.min(paid, b.deposit_amount || 0);
-            return s + (paid - depositCollected);
-          }, 0);
-
-    // Renewals: started today but created on a prior day
-    const totalRenewalsToday = bList.filter(b =>
-      b.status === 'Active' &&
-      isSameIstDay(b.started_at) &&
-      !isSameIstDay(b.created_at),
-    ).length;
-
-    const totalNewBookingsToday = bList.filter(b => isSameIstDay(b.created_at)).length;
-
-    // Cash received today: uses audit logs if available, fallback to legacy booking created/started
-    const totalCashReceivedToday = (todayLogs && todayLogs.length > 0)
-      ? auditLogsCash
-      : bList
-          .filter(b => isSameIstDay(b.started_at) || isSameIstDay(b.created_at))
-          .reduce((s, b) => s + (b.amount_paid_cash || 0), 0);
-
     const totalRidersOnPause = bList.filter(b => b.status === 'Paused').length;
-
     const totalIdleScooters = vList.filter(v => v.status === 'Available').length;
-
     const totalUnderMaintenanceToday = mList.filter(m => isSameIstDay(m.created_at)).length;
 
-    const totalReturnsToday = bList.filter(b =>
-      b.status === 'Completed' && isSameIstDay(b.completed_at),
+    // ── Payment Reconciliation ───────────────────────────────────────────────
+    // 1. Payments from today's audit_logs transactional records
+    let cashFromLogs = 0;
+    let onlineFromLogs = 0;
+    let totalFromLogs = 0;
+    const auditedBookingIds = new Set<string>();
+
+    for (const log of pLogs) {
+      cashFromLogs += log.cashAmount;
+      onlineFromLogs += log.onlineAmount;
+      totalFromLogs += log.amount;
+      if (log.bookingId) {
+        auditedBookingIds.add(log.bookingId);
+      }
+    }
+
+    // 2. Direct payments on bookings created or started today that might not be audited yet
+    let unloggedCash = 0;
+    let unloggedOnline = 0;
+    let unloggedTotal = 0;
+
+    for (const b of bList) {
+      const isToday = isSameIstDay(b.created_at) || isSameIstDay(b.started_at);
+      if (isToday && (b.amount_paid || 0) > 0) {
+        if (!auditedBookingIds.has(b.id)) {
+          const cash = b.amount_paid_cash || 0;
+          const online = b.amount_paid_online || 0;
+          const total = b.amount_paid || 0;
+          unloggedCash += cash;
+          unloggedOnline += online;
+          unloggedTotal += total;
+        }
+      }
+    }
+
+    const totalCashReceivedToday = cashFromLogs + unloggedCash;
+    const totalOnlineReceivedToday = onlineFromLogs + unloggedOnline;
+    const totalRevenueCollectedToday = totalFromLogs + unloggedTotal;
+
+    // ── Renewal vs New Booking vs Return Classification ──────────────────────
+    const completedTodayCustIds = new Set<string>();
+    bList.forEach(b => {
+      if (b.status === 'Completed' && isSameIstDay(b.completed_at)) {
+        completedTodayCustIds.add(b.customer_id);
+      }
+    });
+
+    const renewedNewBookingIds = new Set<string>();
+    bList.forEach(b => {
+      const isToday = isSameIstDay(b.created_at) || isSameIstDay(b.started_at);
+      if (isToday && (b.status === 'Active' || b.status === 'Paused')) {
+        const hasRenewedNote = (b.notes ?? '').toLowerCase().includes('renew');
+        const hasCompletedPrior = completedTodayCustIds.has(b.customer_id);
+        if (hasRenewedNote || hasCompletedPrior) {
+          renewedNewBookingIds.add(b.id);
+        }
+      }
+    });
+
+    const totalRenewalsToday = renewedNewBookingIds.size;
+
+    const totalNewBookingsToday = bList.filter(b =>
+      isSameIstDay(b.created_at) && !renewedNewBookingIds.has(b.id)
     ).length;
+
+    const totalReturnsToday = bList.filter(b => {
+      if (b.status !== 'Completed' || !isSameIstDay(b.completed_at)) return false;
+      const isPartofRenewal = (b.notes ?? '').toLowerCase().includes('renew') ||
+        bList.some(other => other.id !== b.id && other.customer_id === b.customer_id && renewedNewBookingIds.has(other.id));
+      return !isPartofRenewal;
+    }).length;
 
     const kpisResult = {
       totalActiveRentals,
       totalRevenueCollectedToday,
+      totalCashReceivedToday,
+      totalOnlineReceivedToday,
       totalRenewalsToday,
       totalNewBookingsToday,
-      totalCashReceivedToday,
+      totalReturnsToday,
       totalRidersOnPause,
       totalIdleScooters,
       totalUnderMaintenanceToday,
-      totalReturnsToday,
     };
 
     // ── Active Rentals List ────────────────────────────────────────────────────
@@ -229,59 +274,365 @@ export default function EodReportScreen() {
       });
 
     return { kpis: kpisResult, activeRentals: rentals };
-  }, [bookings, vehicles, maintJobs]);
-
-  // ── Share ────────────────────────────────────────────────────────────────────
-  const handleShare = async () => {
-    if (!isEodTime) {
-      Alert.alert('Not available yet', 'EOD report download is available after 10 PM.');
-      return;
-    }
-    const today = todayIst();
-    const lines: string[] = [
-      `YanaOS EOD Report - ${selectedStore?.name ?? 'ZAP Point'}`,
-      `Date: ${fmtDate(today)}`,
-      '',
-      '-- KPIs --',
-      `Active Rentals:      ${kpis.totalActiveRentals}`,
-      `Revenue Today:       ${fmtCurrency(kpis.totalRevenueCollectedToday)}`,
-      `Cash Received:       ${fmtCurrency(kpis.totalCashReceivedToday)}`,
-      `New Bookings:        ${kpis.totalNewBookingsToday}`,
-      `Renewals:            ${kpis.totalRenewalsToday}`,
-      `Returns:             ${kpis.totalReturnsToday}`,
-      `On Pause:            ${kpis.totalRidersOnPause}`,
-      `Idle Scooters:       ${kpis.totalIdleScooters}`,
-      `Into Maintenance:    ${kpis.totalUnderMaintenanceToday}`,
-      '',
-      '-- Active Rentals --',
-      ...activeRentals.map((r, i) =>
-        `${i + 1}. ${r.riderName} | ${r.vehicleNumber} | ${r.rentalPlan} | ` +
-        `Start: ${fmtDate(r.startDate)} | End: ${fmtDate(r.endDate)} | ` +
-        `Days left: ${r.daysRemaining ?? '-'} | ` +
-        `Collected: ${fmtCurrency(r.totalRentCollected)} (Cash: ${fmtCurrency(r.cashCollected)} / Online: ${fmtCurrency(r.onlineCollected)}) | ` +
-        `Pending: ${r.pendingAmount > 0 ? fmtCurrency(r.pendingAmount) : 'NIL'}` +
-        (r.pendingDueDate ? ` by ${fmtDate(r.pendingDueDate)}` : ''),
-      ),
-    ];
-    try {
-      await Share.share({ message: lines.join('\n'), title: `EOD Report ${today}` });
-    } catch {
-      Alert.alert('Share failed', 'Could not open the share sheet.');
-    }
-  };
+  }, [bookings, vehicles, maintJobs, todayLogs]);
 
   const now = new Date();
   const generatedAt = now.toLocaleTimeString('en-IN', { hour: '2-digit', minute: '2-digit', hour12: true });
 
+  // ── Share PDF ────────────────────────────────────────────────────────────────
+  const handleSharePdf = async () => {
+    setGeneratingPdf(true);
+    try {
+      const isAvailable = await Sharing.isAvailableAsync();
+      if (!isAvailable) {
+        Alert.alert('Sharing Unavailable', 'Native sharing is not supported on this device.');
+        return;
+      }
+
+      const today = todayIst();
+      const reportTitle = isEodTime ? 'FINAL CLOSING AUDIT REPORT' : 'INTERIM AUDIT / LIVE SNAPSHOT';
+      const statusBg = isEodTime ? '#059669' : '#0891b2';
+      const storeName = selectedStore?.name ?? 'ZAP Point';
+      const storeLocation = selectedStore?.location ?? 'Bhubaneswar, Odisha';
+
+      const tableRowsHtml = activeRentals
+        .map((r, i) => {
+          const statusClass = r.status === 'Active' ? 'badge-active' : 'badge-paused';
+          const pendingText = r.pendingAmount > 0
+            ? `<span style="color: #EF4444; font-weight: 700;">Rs.${r.pendingAmount.toLocaleString('en-IN')}</span>`
+            : '<span style="color: #10B981; font-weight: 600;">NIL</span>';
+          const dueText = r.pendingDueDate ? `<br/><span style="font-size: 8px; color: #94A3B8;">due ${fmtDate(r.pendingDueDate)}</span>` : '';
+          const daysText = r.daysRemaining === null ? '-' : r.daysRemaining <= 0 ? `<span style="color: #EF4444; font-weight: 800;">OVR</span>` : `${r.daysRemaining}d`;
+
+          return `
+            <tr>
+              <td style="text-align: center; color: #94A3B8;">${i + 1}</td>
+              <td><strong>${r.riderName}</strong></td>
+              <td>${r.vehicleNumber}</td>
+              <td><span class="badge ${r.rentalPlan === 'Weekly' ? 'badge-plan' : 'badge-plan-monthly'}">${r.rentalPlan}</span></td>
+              <td>${fmtDate(r.startDate)} → ${fmtDate(r.endDate)}</td>
+              <td style="text-align: center;">${daysText}</td>
+              <td>Rs.${r.totalRentCollected.toLocaleString('en-IN')}<br/><span style="font-size: 8px; color: #64748B;">C: Rs.${r.cashCollected.toLocaleString('en-IN')} | O: Rs.${r.onlineCollected.toLocaleString('en-IN')}</span></td>
+              <td>${pendingText}${dueText}</td>
+              <td style="text-align: center;"><span class="badge ${statusClass}">${r.status}</span></td>
+            </tr>
+          `;
+        })
+        .join('');
+
+      const htmlContent = `
+        <!DOCTYPE html>
+        <html>
+        <head>
+          <meta charset="utf-8">
+          <title>YanaOS EOD Report</title>
+          <style>
+            @page { margin: 12mm; size: A4 portrait; }
+            * { box-sizing: border-box; }
+            body {
+              font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, Helvetica, Arial, sans-serif;
+              color: #0F1C2E;
+              margin: 0;
+              padding: 0;
+              background-color: #FFFFFF;
+              font-size: 10px;
+              line-height: 1.3;
+            }
+            .header {
+              display: flex;
+              justify-content: space-between;
+              align-items: flex-start;
+              border-bottom: 2px solid #0F1C2E;
+              padding-bottom: 12px;
+              margin-bottom: 16px;
+            }
+            .brand-col h1 {
+              font-size: 20px;
+              font-weight: 900;
+              letter-spacing: -0.5px;
+              margin: 0 0 2px 0;
+              color: #0F1C2E;
+            }
+            .brand-col .sub {
+              font-size: 12px;
+              font-weight: 700;
+              color: #06B6D4;
+              margin: 0;
+            }
+            .brand-col .loc {
+              font-size: 10px;
+              color: #64748B;
+              margin-top: 2px;
+            }
+            .meta-col {
+              text-align: right;
+            }
+            .status-badge {
+              display: inline-block;
+              padding: 4px 10px;
+              border-radius: 20px;
+              font-size: 9px;
+              font-weight: 800;
+              letter-spacing: 0.5px;
+              color: #FFFFFF;
+              background-color: ${statusBg};
+              margin-bottom: 6px;
+            }
+            .meta-line {
+              font-size: 9px;
+              color: #64748B;
+              margin-top: 2px;
+            }
+
+            .fin-banner {
+              display: flex;
+              gap: 10px;
+              background: #F8FAFC;
+              border: 1px solid #E2E8F0;
+              border-radius: 8px;
+              padding: 12px;
+              margin-bottom: 16px;
+            }
+            .fin-card {
+              flex: 1;
+              padding: 8px 12px;
+              background: #FFFFFF;
+              border: 1px solid #E2E8F0;
+              border-radius: 6px;
+            }
+            .fin-card.highlight {
+              border-color: #06B6D4;
+              background: #F0FDFA;
+            }
+            .fin-label {
+              font-size: 8px;
+              font-weight: 800;
+              text-transform: uppercase;
+              letter-spacing: 0.5px;
+              color: #64748B;
+              margin-bottom: 4px;
+            }
+            .fin-value {
+              font-size: 18px;
+              font-weight: 900;
+              color: #0F1C2E;
+            }
+            .fin-sub {
+              font-size: 8px;
+              color: #64748B;
+              margin-top: 2px;
+            }
+
+            .kpi-matrix {
+              display: flex;
+              flex-wrap: wrap;
+              gap: 8px;
+              margin-bottom: 18px;
+            }
+            .kpi-tile {
+              width: calc(25% - 6px);
+              background: #F8FAFC;
+              border: 1px solid #E2E8F0;
+              border-radius: 6px;
+              padding: 8px 10px;
+            }
+            .kpi-tile-label {
+              font-size: 8px;
+              font-weight: 700;
+              color: #64748B;
+              text-transform: uppercase;
+              letter-spacing: 0.4px;
+              margin-bottom: 2px;
+            }
+            .kpi-tile-val {
+              font-size: 15px;
+              font-weight: 800;
+              color: #0F1C2E;
+            }
+
+            .section-title {
+              font-size: 11px;
+              font-weight: 800;
+              color: #0F1C2E;
+              text-transform: uppercase;
+              letter-spacing: 0.5px;
+              margin: 16px 0 8px 0;
+              border-left: 3px solid #06B6D4;
+              padding-left: 6px;
+            }
+
+            table {
+              width: 100%;
+              border-collapse: collapse;
+              margin-top: 6px;
+              border: 1px solid #E2E8F0;
+              border-radius: 6px;
+              overflow: hidden;
+            }
+            th {
+              background-color: #0F1C2E;
+              color: #FFFFFF;
+              font-size: 8px;
+              font-weight: 700;
+              text-transform: uppercase;
+              letter-spacing: 0.5px;
+              padding: 6px 8px;
+              text-align: left;
+            }
+            td {
+              padding: 6px 8px;
+              border-bottom: 1px solid #F1F5F9;
+              font-size: 9px;
+              color: #1E293B;
+              vertical-align: middle;
+            }
+            tr:nth-child(even) td {
+              background-color: #F8FAFC;
+            }
+            .badge {
+              display: inline-block;
+              padding: 2px 6px;
+              border-radius: 4px;
+              font-size: 8px;
+              font-weight: 700;
+              text-transform: uppercase;
+            }
+            .badge-active { background: #DCFCE7; color: #15803D; }
+            .badge-paused { background: #FEF3C7; color: #B45309; }
+            .badge-plan   { background: #E0F2FE; color: #0369A1; }
+            .badge-plan-monthly { background: #F3E8FF; color: #7E22CE; }
+
+            .footer {
+              margin-top: 24px;
+              padding-top: 12px;
+              border-top: 1px solid #E2E8F0;
+              display: flex;
+              justify-content: space-between;
+              font-size: 8px;
+              color: #94A3B8;
+            }
+          </style>
+        </head>
+        <body>
+          <div class="header">
+            <div class="brand-col">
+              <h1>YanaOS Operations</h1>
+              <div class="sub">ZAP Point: ${storeName}</div>
+              <div class="loc">${storeLocation}</div>
+            </div>
+            <div class="meta-col">
+              <div class="status-badge">${reportTitle}</div>
+              <div class="meta-line">Date: <strong>${fmtDate(today)}</strong></div>
+              <div class="meta-line">Time: ${generatedAt} IST</div>
+              <div class="meta-line">Operator: ${operatorName}</div>
+            </div>
+          </div>
+
+          <div class="fin-banner">
+            <div class="fin-card highlight">
+              <div class="fin-label">Total Collections Today</div>
+              <div class="fin-value" style="color: #0891b2;">Rs.${kpis.totalRevenueCollectedToday.toLocaleString('en-IN')}</div>
+              <div class="fin-sub">All gross intake (cash + UPI)</div>
+            </div>
+            <div class="fin-card">
+              <div class="fin-label">Cash Received (Drawer)</div>
+              <div class="fin-value" style="color: #D97706;">Rs.${kpis.totalCashReceivedToday.toLocaleString('en-IN')}</div>
+              <div class="fin-sub">Physical cash collected</div>
+            </div>
+            <div class="fin-card">
+              <div class="fin-label">Online (UPI / Razorpay)</div>
+              <div class="fin-value" style="color: #059669;">Rs.${kpis.totalOnlineReceivedToday.toLocaleString('en-IN')}</div>
+              <div class="fin-sub">Digital collections</div>
+            </div>
+          </div>
+
+          <div class="section-title">Operational KPIs</div>
+          <div class="kpi-matrix">
+            <div class="kpi-tile">
+              <div class="kpi-tile-label">Active Rentals</div>
+              <div class="kpi-tile-val">${kpis.totalActiveRentals}</div>
+            </div>
+            <div class="kpi-tile">
+              <div class="kpi-tile-label">Riders On Pause</div>
+              <div class="kpi-tile-val">${kpis.totalRidersOnPause}</div>
+            </div>
+            <div class="kpi-tile">
+              <div class="kpi-tile-label">New Bookings Today</div>
+              <div class="kpi-tile-val">${kpis.totalNewBookingsToday}</div>
+            </div>
+            <div class="kpi-tile">
+              <div class="kpi-tile-label">Renewals Today</div>
+              <div class="kpi-tile-val">${kpis.totalRenewalsToday}</div>
+            </div>
+            <div class="kpi-tile">
+              <div class="kpi-tile-label">Returns Today</div>
+              <div class="kpi-tile-val">${kpis.totalReturnsToday}</div>
+            </div>
+            <div class="kpi-tile">
+              <div class="kpi-tile-label">Available Scooters</div>
+              <div class="kpi-tile-val">${kpis.totalIdleScooters}</div>
+            </div>
+            <div class="kpi-tile">
+              <div class="kpi-tile-label">Into Maintenance</div>
+              <div class="kpi-tile-val">${kpis.totalUnderMaintenanceToday}</div>
+            </div>
+            <div class="kpi-tile">
+              <div class="kpi-tile-label">Due Dues Active</div>
+              <div class="kpi-tile-val">${activeRentals.filter(r => r.pendingAmount > 0).length}</div>
+            </div>
+          </div>
+
+          <div class="section-title">Active Rentals Lifecycle Registry (${activeRentals.length})</div>
+          <table>
+            <thead>
+              <tr>
+                <th style="width: 24px; text-align: center;">#</th>
+                <th>Rider Name</th>
+                <th>Vehicle</th>
+                <th>Plan</th>
+                <th>Period</th>
+                <th style="text-align: center;">Days Left</th>
+                <th>Paid</th>
+                <th>Pending</th>
+                <th style="text-align: center;">Status</th>
+              </tr>
+            </thead>
+            <tbody>
+              ${tableRowsHtml || '<tr><td colspan="9" style="text-align: center; padding: 20px; color: #94A3B8;">No active rentals today</td></tr>'}
+            </tbody>
+          </table>
+
+          <div class="footer">
+            <div>© 2026 Yantron Technology Pvt. Ltd. | Confidential Operations Registry</div>
+            <div>Generated by YanaOperator v1.9 • ${today} ${generatedAt}</div>
+          </div>
+        </body>
+        </html>
+      `;
+
+      const { uri } = await Print.printToFileAsync({ html: htmlContent });
+      await Sharing.shareAsync(uri, {
+        mimeType: 'application/pdf',
+        dialogTitle: `YanaOS_EOD_Report_${today}`,
+        UTI: 'com.adobe.pdf',
+      });
+    } catch (err) {
+      console.error('[EodReportScreen] PDF export failed:', err);
+      Alert.alert('Export Failed', 'Could not generate or share the PDF report.');
+    } finally {
+      setGeneratingPdf(false);
+    }
+  };
+
   const KPI_CONFIG: KpiProps[] = [
     { label: 'Active Rentals',    value: kpis.totalActiveRentals,                           icon: 'radio-button-on-outline',      color: Colors.brandTeal,       bg: Colors.surfaceTeal   },
     { label: 'Revenue Collected', value: fmtCurrency(kpis.totalRevenueCollectedToday),      icon: 'cash-outline',                 color: Colors.statusActive,    bg: Colors.surfaceGreen  },
+    { label: 'Cash Received',     value: fmtCurrency(kpis.totalCashReceivedToday),          icon: 'wallet-outline',               color: Colors.statusWarning,   bg: Colors.surfaceAmber  },
+    { label: 'Online (UPI)',      value: fmtCurrency(kpis.totalOnlineReceivedToday),        icon: 'card-outline',                 color: Colors.brandTeal,       bg: Colors.surfaceTeal   },
     { label: 'New Bookings',      value: kpis.totalNewBookingsToday,                        icon: 'add-circle-outline',           color: Colors.statusInfo,      bg: Colors.surfaceBlue   },
     { label: 'Renewals Today',    value: kpis.totalRenewalsToday,                           icon: 'refresh-circle-outline',       color: '#7C3AED',              bg: '#F5F3FF'            },
-    { label: 'Cash Received',     value: fmtCurrency(kpis.totalCashReceivedToday),          icon: 'wallet-outline',               color: Colors.statusWarning,   bg: Colors.surfaceAmber  },
     { label: 'Riders on Pause',   value: kpis.totalRidersOnPause,                           icon: 'pause-circle-outline',         color: '#D97706',              bg: '#FFFBEB'            },
     { label: 'Idle Scooters',     value: kpis.totalIdleScooters,                            icon: 'bicycle-outline',              color: Colors.textSecondary,   bg: Colors.bgApp         },
-    { label: 'Into Maintenance',  value: kpis.totalUnderMaintenanceToday,                   icon: 'construct-outline',            color: Colors.statusError,     bg: Colors.surfaceRed    },
     { label: 'Returns Today',     value: kpis.totalReturnsToday,                            icon: 'checkmark-done-circle-outline',color: Colors.statusActive,    bg: Colors.surfaceGreen  },
   ];
 
@@ -306,21 +657,26 @@ export default function EodReportScreen() {
         </View>
 
         <Pressable
-          onPress={() => { void handleShare(); }}
+          onPress={() => { void handleSharePdf(); }}
+          disabled={generatingPdf}
           style={({ pressed }) => [
             styles.shareBtn,
-            isEodTime && styles.shareBtnActive,
-            { opacity: pressed ? 0.8 : 1 },
+            styles.shareBtnActive,
+            { opacity: pressed || generatingPdf ? 0.75 : 1 },
           ]}
         >
-          <Ionicons
-            name="share-outline"
-            size={14}
-            color={isEodTime ? '#fff' : Colors.textMuted}
-            style={{ marginRight: 4 }}
-          />
-          <Text style={[styles.shareBtnText, isEodTime && styles.shareBtnTextActive]}>
-            {isEodTime ? 'Share' : 'After 10 PM'}
+          {generatingPdf ? (
+            <ActivityIndicator size="small" color={Colors.brandNavy} style={{ marginRight: 4 }} />
+          ) : (
+            <Ionicons
+              name="document-text-outline"
+              size={14}
+              color={Colors.brandNavy}
+              style={{ marginRight: 4 }}
+            />
+          )}
+          <Text style={[styles.shareBtnText, styles.shareBtnTextActive]}>
+            {generatingPdf ? 'Generating...' : 'Share PDF'}
           </Text>
         </Pressable>
       </View>
@@ -531,9 +887,9 @@ const styles = StyleSheet.create({
     borderColor: Colors.borderLight,
     backgroundColor: Colors.bgApp,
   },
-  shareBtnActive:     { backgroundColor: Colors.statusActive, borderColor: Colors.statusActive },
-  shareBtnText:       { fontSize: 10, fontWeight: '700', color: Colors.textMuted },
-  shareBtnTextActive: { color: '#fff' },
+  shareBtnActive:     { backgroundColor: Colors.brandTeal, borderColor: Colors.brandTeal },
+  shareBtnText:       { fontSize: 11, fontWeight: '800', color: Colors.brandNavy },
+  shareBtnTextActive: { color: Colors.brandNavy },
 
   timestampBar: {
     flexDirection: 'row',

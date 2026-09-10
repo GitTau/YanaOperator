@@ -325,6 +325,7 @@ export interface TodayPaymentLog {
   cashAmount: number;
   onlineAmount: number;
   timestamp: string;
+  bookingId?: string | null;
 }
 
 export function useTodayPaymentLogs(storeId: string | null) {
@@ -348,7 +349,7 @@ export function useTodayPaymentLogs(storeId: string | null) {
         .eq('store_id', storeId)
         .eq('type', 'BOOKING')
         .gte('timestamp', startOfDayIst.toISOString())
-        .like('message', 'Payment of Rs.%');
+        .like('message', 'Payment of %');
 
       if (error) {
         console.warn('[useTodayPaymentLogs] Error:', error.message);
@@ -357,20 +358,26 @@ export function useTodayPaymentLogs(storeId: string | null) {
 
       const results: TodayPaymentLog[] = [];
       for (const row of data ?? []) {
-        const msgMatch = (row.message ?? '').match(/Payment of Rs\.(\d+(\.\d+)?)/);
-        const total = msgMatch ? parseFloat(msgMatch[1]) : 0;
+        const msgMatch = (row.message ?? '').match(/Payment of (?:Rs\.|₹)?\s*([\d,]+(?:\.\d+)?)/i);
+        const total = msgMatch ? parseFloat(msgMatch[1].replace(/,/g, '')) : 0;
 
-        const cashMatch = (row.reason ?? '').match(/Cash:\s*(\d+(\.\d+)?)/);
-        const cash = cashMatch ? parseFloat(cashMatch[1]) : 0;
+        const cashMatch = (row.reason ?? '').match(/Cash:\s*₹?\s*([\d,]+(?:\.\d+)?)/i);
+        const cash = cashMatch ? parseFloat(cashMatch[1].replace(/,/g, '')) : 0;
 
-        const onlineMatch = (row.reason ?? '').match(/Online:\s*(\d+(\.\d+)?)/);
-        const online = onlineMatch ? parseFloat(onlineMatch[1]) : Math.max(0, total - cash);
+        const onlineMatch = (row.reason ?? '').match(/Online:\s*₹?\s*([\d,]+(?:\.\d+)?)/i);
+        const online = onlineMatch
+          ? parseFloat(onlineMatch[1].replace(/,/g, ''))
+          : Math.max(0, total - cash);
+
+        const bookingMatch = (row.message ?? '').match(/booking\s+([0-9a-fA-F-]{36})/i);
+        const bookingId = bookingMatch ? bookingMatch[1] : null;
 
         results.push({
           amount: total,
           cashAmount: cash,
           onlineAmount: online,
           timestamp: row.timestamp,
+          bookingId,
         });
       }
 

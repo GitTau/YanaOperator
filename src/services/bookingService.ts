@@ -546,12 +546,43 @@ export async function renewBooking(params: RenewBookingParams): Promise<string> 
       amount_paid: params.newDepositAmount + paymentToNewBooking,
       amount_paid_cash: newCash,
       amount_paid_online: newOnline,
+      notes: `Renewed from booking ${params.oldBookingId}`,
     })
     .eq('id', newBookingId);
 
   if (updateError) {
     throw new Error(`Failed to initialize renewed booking details: ${updateError.message}`);
   }
+
+  // Also tag old booking as renewed into the new booking
+  await supabase
+    .from('bookings')
+    .update({
+      notes: `Renewed into booking ${newBookingId}`,
+    })
+    .eq('id', params.oldBookingId);
+
+  // Record audit log for payment collected on the new booking
+  const newCashCollected = Math.max(0, params.cashAmountCollected - oldCash);
+  const newOnlineCollected = Math.max(0, params.onlineAmountCollected - oldOnline);
+  if (paymentToNewBooking > 0) {
+    await supabase.from('audit_logs').insert({
+      store_id: params.storeId,
+      operator_id: params.operatorId,
+      type: 'BOOKING',
+      message: `Payment of Rs.${paymentToNewBooking} recorded for booking ${newBookingId}`,
+      reason: `Breakdown: Cash: ${newCashCollected} | Online: ${newOnlineCollected} | Renewal payment (carried deposit: ${params.newDepositAmount})`,
+    });
+  }
+
+  // Record audit log for renewal event
+  await supabase.from('audit_logs').insert({
+    store_id: params.storeId,
+    operator_id: params.operatorId,
+    type: 'BOOKING',
+    message: `Booking Renewed: ${newBookingId}`,
+    reason: `Renewed from prior booking ${params.oldBookingId}`,
+  });
 
   return newBookingId;
 }
