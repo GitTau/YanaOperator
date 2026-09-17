@@ -431,6 +431,7 @@ export interface RenewBookingParams {
   cashAmountCollected: number;
   onlineAmountCollected: number;
   oldBookingBalance: number;
+  oldBookingCredit?: number;
   customerId: string;
   operatorId: string;
   storeId: string;
@@ -440,9 +441,10 @@ export interface RenewBookingParams {
 }
 
 export async function renewBooking(params: RenewBookingParams): Promise<string> {
+  const oldCredit = params.oldBookingCredit ?? 0;
   const totalCollected = params.cashAmountCollected + params.onlineAmountCollected;
   const paymentToOldBooking = Math.min(params.oldBookingBalance, totalCollected);
-  const paymentToNewBooking = Math.max(0, totalCollected - paymentToOldBooking);
+  const paymentToNewBooking = Math.max(0, totalCollected - paymentToOldBooking) + oldCredit;
 
   // Pro-rate payment to old booking cash/online splits
   let oldCash = 0;
@@ -518,16 +520,33 @@ export async function renewBooking(params: RenewBookingParams): Promise<string> 
   // Fetch old booking to check how the deposit was originally paid (cash vs online)
   const { data: oldBooking } = await supabase
     .from('bookings')
-    .select('amount_paid_cash, amount_paid_online')
+    .select('amount_paid, amount_paid_cash, amount_paid_online')
     .eq('id', params.oldBookingId)
     .single();
 
   const oldBookingPaidCash = oldBooking?.amount_paid_cash ?? 0;
   const wasDepositPaidCash = oldBookingPaidCash >= params.newDepositAmount;
 
-  // Splits for new booking (incorporating the carried-over security deposit)
+  // Deduct oldCredit from old booking if excess payment is being rolled over
+  if (oldCredit > 0 && oldBooking) {
+    const updatedPaid = Math.max(0, (oldBooking.amount_paid || 0) - oldCredit);
+    const onlineDeduct = Math.min(oldCredit, oldBooking.amount_paid_online || 0);
+    const cashDeduct = oldCredit - onlineDeduct;
+    const updatedOnline = Math.max(0, (oldBooking.amount_paid_online || 0) - onlineDeduct);
+    const updatedCash = Math.max(0, (oldBooking.amount_paid_cash || 0) - cashDeduct);
+    await supabase
+      .from('bookings')
+      .update({
+        amount_paid: updatedPaid,
+        amount_paid_online: updatedOnline,
+        amount_paid_cash: updatedCash,
+      })
+      .eq('id', params.oldBookingId);
+  }
+
+  // Splits for new booking (incorporating the carried-over security deposit + rolled credit)
   let newCash = Math.max(0, params.cashAmountCollected - oldCash);
-  let newOnline = Math.max(0, params.onlineAmountCollected - oldOnline);
+  let newOnline = Math.max(0, params.onlineAmountCollected - oldOnline) + oldCredit;
 
   if (wasDepositPaidCash) {
     newCash += params.newDepositAmount;
@@ -564,14 +583,14 @@ export async function renewBooking(params: RenewBookingParams): Promise<string> 
 
   // Record audit log for payment collected on the new booking
   const newCashCollected = Math.max(0, params.cashAmountCollected - oldCash);
-  const newOnlineCollected = Math.max(0, params.onlineAmountCollected - oldOnline);
+  const newOnlineCollected = Math.max(0, params.onlineAmountCollected - oldOnline) + oldCredit;
   if (paymentToNewBooking > 0) {
     await supabase.from('audit_logs').insert({
       store_id: params.storeId,
       operator_id: params.operatorId,
       type: 'BOOKING',
       message: `Payment of Rs.${paymentToNewBooking} recorded for booking ${newBookingId}`,
-      reason: `Breakdown: Cash: ${newCashCollected} | Online: ${newOnlineCollected} | Renewal payment (carried deposit: ${params.newDepositAmount})`,
+      reason: `Breakdown: Cash: ${newCashCollected} | Online: ${newOnlineCollected} | Renewal payment (carried deposit: ${params.newDepositAmount}${oldCredit > 0 ? `, rolled credit: ${oldCredit}` : ''})`,
     });
   }
 

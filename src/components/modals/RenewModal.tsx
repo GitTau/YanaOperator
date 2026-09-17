@@ -108,7 +108,7 @@ export function RenewModal({
 
   // Financial status of the old booking
   const oldBookingDues = useMemo(() => {
-    if (!booking) return { totalFines: 0, balanceDue: 0 };
+    if (!booking) return { totalFines: 0, balanceDue: 0, creditAmount: 0 };
     const { overdueFine } = calculateOverdueFines(
       booking.rental_plan,
       booking.start_date,
@@ -120,17 +120,19 @@ export function RenewModal({
       booking.paused_at,
     );
     const totalFines = booking.fines_amount + overdueFine + checklistFines;
-    const balanceDue = booking.total_amount + booking.deposit_amount + totalFines - booking.amount_paid;
+    const netBalance = booking.total_amount + booking.deposit_amount + totalFines - booking.amount_paid;
     return {
       totalFines,
-      balanceDue: Math.max(0, balanceDue),
+      balanceDue: Math.max(0, netBalance),
+      creditAmount: Math.max(0, -netBalance),
     };
   }, [booking, checklistFines]);
 
   // Calculations
   const newRent = pricing?.subtotal ?? 0;
   const oldOutstanding = oldBookingDues.balanceDue;
-  const totalToCollect = newRent + oldOutstanding;
+  const oldCredit = oldBookingDues.creditAmount;
+  const totalToCollect = Math.max(0, newRent + oldOutstanding - oldCredit);
 
   // Next subscription gate amount (how much more cash we need to collect for the new booking to clear the gate)
   const newBookingGate = useMemo(() => {
@@ -148,7 +150,7 @@ export function RenewModal({
     return Math.max(0, gate.gateAmount - pricing.securityDeposit);
   }, [plan, newRent, pricing, startDate, endDate]);
 
-  const minPaymentRequired = oldOutstanding + newBookingGate;
+  const minPaymentRequired = Math.max(0, oldOutstanding + newBookingGate - oldCredit);
 
   const cashParsed = parseFloat(cashAmount) || 0;
   const onlineParsed = parseFloat(onlineAmount) || 0;
@@ -207,6 +209,7 @@ export function RenewModal({
         cashAmountCollected: cashParsed,
         onlineAmountCollected: onlineParsed,
         oldBookingBalance: oldOutstanding,
+        oldBookingCredit: oldCredit,
         customerId: booking.customer_id,
         operatorId,
         storeId,
@@ -399,10 +402,22 @@ export function RenewModal({
                 <Text style={styles.breakdownLabel}>Security Deposit</Text>
                 <Text style={[styles.breakdownVal, { color: Colors.statusActive }]}>Transferred (₹0)</Text>
               </View>
-              <View style={styles.breakdownRow}>
-                <Text style={styles.breakdownLabel}>Old Fines & Dues</Text>
-                <Text style={[styles.breakdownVal, { color: Colors.statusError }]}>{formatCurrency(oldOutstanding)}</Text>
-              </View>
+              {oldOutstanding > 0 && (
+                <View style={styles.breakdownRow}>
+                  <Text style={styles.breakdownLabel}>Old Fines & Dues</Text>
+                  <Text style={[styles.breakdownVal, { color: Colors.statusError }]}>{formatCurrency(oldOutstanding)}</Text>
+                </View>
+              )}
+              {oldCredit > 0 && (
+                <View style={styles.breakdownRow}>
+                  <Text style={[styles.breakdownLabel, { color: Colors.statusActive, fontWeight: '700' }]}>
+                    Prepaid Credit Rollover
+                  </Text>
+                  <Text style={[styles.breakdownVal, { color: Colors.statusActive, fontWeight: '700' }]}>
+                    - {formatCurrency(oldCredit)}
+                  </Text>
+                </View>
+              )}
               <Divider style={{ marginVertical: 8 }} />
               
               <View style={styles.inputsRow}>

@@ -3,6 +3,7 @@
 // Shows current gate status before + after payment
 // ─────────────────────────────────────────────────────────────────────────────
 
+import { Ionicons } from '@expo/vector-icons';
 import React, { useState } from 'react';
 import {
   KeyboardAvoidingView,
@@ -19,6 +20,7 @@ import type { BookingWithDetails } from '../../lib/database.types';
 import {
   calculatePaymentGate,
   formatCurrency,
+  getEffectiveEndDate,
   recordPayment,
 } from '../../services/bookingService';
 import { Divider, YanaButton } from '../ui';
@@ -30,6 +32,7 @@ interface PaymentModalProps {
   onSuccess: () => void;
   storeId: string;
   operatorId: string;
+  onSwitchToRenew?: (b: BookingWithDetails) => void;
 }
 
 export function PaymentModal({
@@ -39,6 +42,7 @@ export function PaymentModal({
   onSuccess,
   storeId,
   operatorId,
+  onSwitchToRenew,
 }: PaymentModalProps) {
   const [cashAmount, setCashAmount] = useState('');
   const [onlineAmount, setOnlineAmount] = useState('');
@@ -78,6 +82,16 @@ export function PaymentModal({
         booking.paused_at,
       )
     : null;
+
+  const isDueForRenewal = (() => {
+    if (!booking || booking.status === 'Completed' || booking.status === 'Cancelled') return false;
+    const end = getEffectiveEndDate(booking.end_date, booking.status, booking.paused_at);
+    if (!end) return false;
+    end.setHours(0, 0, 0, 0);
+    const today = new Date();
+    today.setHours(0, 0, 0, 0);
+    return end <= today;
+  })();
 
   const handleSubmit = async () => {
     if (!booking) return;
@@ -143,6 +157,31 @@ export function PaymentModal({
               {booking.rental_plan} · {booking.vehicle?.plate_number ?? 'No Vehicle'}
             </Text>
           </View>
+
+          {isDueForRenewal && (
+            <View style={styles.renewalAlert}>
+              <Ionicons name="alert-circle-outline" size={20} color={Colors.textOrange} style={{ marginTop: 2 }} />
+              <View style={{ flex: 1, marginLeft: 8 }}>
+                <Text style={[Typography.caption, { color: Colors.textOrange, fontWeight: '700' }]}>
+                  Subscription Due for Renewal
+                </Text>
+                <Text style={[Typography.caption, { color: Colors.textSecondary, marginTop: 1 }]}>
+                  Recording a payment here only credits past dues. It will NOT extend the subscription.
+                </Text>
+              </View>
+              {onSwitchToRenew && (
+                <Pressable
+                  style={styles.switchRenewBtn}
+                  onPress={() => {
+                    handleClose();
+                    onSwitchToRenew(booking);
+                  }}
+                >
+                  <Text style={styles.switchRenewText}>Renew</Text>
+                </Pressable>
+              )}
+            </View>
+          )}
 
           <Divider />
 
@@ -304,4 +343,26 @@ const styles = StyleSheet.create({
   actionBar: { flexDirection: 'row', gap: Spacing.sm, padding: Spacing.md, borderTopWidth: 1, borderTopColor: Colors.borderLight, backgroundColor: Colors.surfaceCard },
   cancelBtn: { flex: 1 },
   submitBtn: { flex: 2 },
+  renewalAlert: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    backgroundColor: Colors.surfaceAmber,
+    padding: Spacing.sm,
+    borderRadius: Radius.card,
+    borderWidth: 1,
+    borderColor: '#FDE68A',
+    marginBottom: Spacing.sm,
+  },
+  switchRenewBtn: {
+    backgroundColor: Colors.brandTeal,
+    paddingHorizontal: 12,
+    paddingVertical: 6,
+    borderRadius: Radius.button,
+    marginLeft: 8,
+  },
+  switchRenewText: {
+    ...Typography.badgeText,
+    color: Colors.brandNavy,
+    fontWeight: '700',
+  },
 });

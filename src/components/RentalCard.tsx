@@ -59,17 +59,25 @@ export function RentalCard({ booking, onDispatch, onCollectCash, onPause, onResu
     ? effectiveEndObj.toLocaleDateString('en-IN', { day: 'numeric', month: 'short' })
     : '—';
 
-  const initials = booking.customer.name.slice(0, 2).toUpperCase();
-
-  const isOverdue = (() => {
-    if (isPaused || isClosed) return false;
-    const end = getEffectiveEndDate(booking.end_date, booking.status, booking.paused_at);
-    if (!end) return false;
+  const daysLeft = (() => {
+    if (!effectiveEndObj) return null;
+    const end = new Date(effectiveEndObj);
     end.setHours(0, 0, 0, 0);
     const today = new Date();
     today.setHours(0, 0, 0, 0);
-    return end < today;
+    return Math.round((end.getTime() - today.getTime()) / (1000 * 60 * 60 * 24));
   })();
+
+  const isOverdue = (() => {
+    if (isPaused || isClosed) return false;
+    if (daysLeft === null) return false;
+    return daysLeft < 0;
+  })();
+
+  // Due for renewal if overdue OR active and expiring today / within 2 days
+  const isDueForRenewal = isOverdue || (isActive && daysLeft !== null && daysLeft <= 2);
+
+  const initials = booking.customer.name.slice(0, 2).toUpperCase();
 
   return (
     <View style={[styles.card, isOverdue && styles.cardOverdue]}>
@@ -135,9 +143,30 @@ export function RentalCard({ booking, onDispatch, onCollectCash, onPause, onResu
           · {booking.rental_plan === 'Weekly' ? '100% gate' : 'min ₹4,000 gate'}
         </Text>
         <View style={{ flex: 1 }} />
-        <Ionicons name="calendar-outline" size={11} color={Colors.textMuted} style={{ marginRight: 3 }} />
-        <Text style={styles.dueLabel}>
-          {isDraft ? `Due: ${returnDue}` : `${dispatchDisp} → ${returnDue}`}
+        <Ionicons
+          name="calendar-outline"
+          size={11}
+          color={isOverdue ? Colors.statusError : daysLeft === 0 ? Colors.textOrange : Colors.textMuted}
+          style={{ marginRight: 3 }}
+        />
+        <Text
+          style={[
+            styles.dueLabel,
+            isOverdue && { color: Colors.statusError, fontWeight: '700' },
+            daysLeft === 0 && { color: Colors.textOrange, fontWeight: '700' },
+          ]}
+        >
+          {isDraft
+            ? `Due: ${returnDue}`
+            : `${dispatchDisp} → ${returnDue}${
+                isOverdue
+                  ? ` (${Math.abs(daysLeft!)}d late)`
+                  : daysLeft === 0
+                  ? ' (Ends today)'
+                  : daysLeft === 1
+                  ? ' (Ends tomorrow)'
+                  : ''
+              }`}
         </Text>
       </View>
 
@@ -254,24 +283,79 @@ export function RentalCard({ booking, onDispatch, onCollectCash, onPause, onResu
                 </Pressable>
               )}
 
-              {/* Active → Pause + Return */}
+              {/* Active → Renew/Return/Pause/Collect */}
               {isActive && (
-                <View style={styles.twoColRow}>
-                  <Pressable
-                    style={({ pressed }) => [styles.halfBtn, styles.halfBtnOrange, { opacity: pressed ? 0.85 : 1 }]}
-                    onPress={() => onPause(booking)}
-                  >
-                    <Ionicons name="pause-outline" size={14} color="#FFFFFF" style={{ marginRight: 4 }} />
-                    <Text style={[styles.halfBtnText, { color: '#FFFFFF' }]}>PAUSE</Text>
-                  </Pressable>
-                  <Pressable
-                    style={({ pressed }) => [styles.halfBtn, styles.halfBtnGreen, { opacity: pressed ? 0.85 : 1 }]}
-                    onPress={() => onReturn(booking)}
-                  >
-                    <Ionicons name="checkmark-circle-outline" size={14} color="#FFFFFF" style={{ marginRight: 4 }} />
-                    <Text style={[styles.halfBtnText, { color: '#FFFFFF' }]}>RETURN</Text>
-                  </Pressable>
-                </View>
+                isDueForRenewal ? (
+                  <>
+                    <View style={styles.twoColRow}>
+                      <Pressable
+                        style={({ pressed }) => [styles.halfBtn, styles.halfBtnTeal, { opacity: pressed ? 0.85 : 1 }]}
+                        onPress={() => onRenew(booking)}
+                      >
+                        <Ionicons name="refresh-outline" size={14} color={Colors.brandNavy} style={{ marginRight: 4 }} />
+                        <Text style={[styles.halfBtnText, { color: Colors.brandNavy }]}>RENEW</Text>
+                      </Pressable>
+                      <Pressable
+                        style={({ pressed }) => [styles.halfBtn, styles.halfBtnGreen, { opacity: pressed ? 0.85 : 1 }]}
+                        onPress={() => onReturn(booking)}
+                      >
+                        <Ionicons name="checkmark-circle-outline" size={14} color="#FFFFFF" style={{ marginRight: 4 }} />
+                        <Text style={[styles.halfBtnText, { color: '#FFFFFF' }]}>RETURN</Text>
+                      </Pressable>
+                    </View>
+                    <View style={styles.twoColRow}>
+                      <Pressable
+                        style={({ pressed }) => [styles.halfBtn, styles.halfBtnOrange, { opacity: pressed ? 0.85 : 1 }]}
+                        onPress={() => onPause(booking)}
+                      >
+                        <Ionicons name="pause-outline" size={14} color="#FFFFFF" style={{ marginRight: 4 }} />
+                        <Text style={[styles.halfBtnText, { color: '#FFFFFF' }]}>PAUSE</Text>
+                      </Pressable>
+                      <Pressable
+                        style={({ pressed }) => [styles.halfBtn, styles.halfBtnGhost, { opacity: pressed ? 0.75 : 1 }]}
+                        onPress={() => onCollectCash(booking)}
+                      >
+                        <Ionicons name="cash-outline" size={14} color={Colors.textSecondary} style={{ marginRight: 4 }} />
+                        <Text style={[styles.halfBtnText, { color: Colors.textSecondary, fontSize: 11 }]}>COLLECT CASH</Text>
+                      </Pressable>
+                    </View>
+                  </>
+                ) : (
+                  <>
+                    <View style={styles.twoColRow}>
+                      <Pressable
+                        style={({ pressed }) => [styles.halfBtn, styles.halfBtnOrange, { opacity: pressed ? 0.85 : 1 }]}
+                        onPress={() => onPause(booking)}
+                      >
+                        <Ionicons name="pause-outline" size={14} color="#FFFFFF" style={{ marginRight: 4 }} />
+                        <Text style={[styles.halfBtnText, { color: '#FFFFFF' }]}>PAUSE</Text>
+                      </Pressable>
+                      <Pressable
+                        style={({ pressed }) => [styles.halfBtn, styles.halfBtnGreen, { opacity: pressed ? 0.85 : 1 }]}
+                        onPress={() => onReturn(booking)}
+                      >
+                        <Ionicons name="checkmark-circle-outline" size={14} color="#FFFFFF" style={{ marginRight: 4 }} />
+                        <Text style={[styles.halfBtnText, { color: '#FFFFFF' }]}>RETURN</Text>
+                      </Pressable>
+                    </View>
+                    <View style={styles.twoColRow}>
+                      <Pressable
+                        style={({ pressed }) => [styles.halfBtn, styles.halfBtnOutlineTeal, { opacity: pressed ? 0.85 : 1 }]}
+                        onPress={() => onRenew(booking)}
+                      >
+                        <Ionicons name="refresh-outline" size={14} color={Colors.brandTeal} style={{ marginRight: 4 }} />
+                        <Text style={[styles.halfBtnText, { color: Colors.brandTeal, fontSize: 11 }]}>RENEW EARLY</Text>
+                      </Pressable>
+                      <Pressable
+                        style={({ pressed }) => [styles.halfBtn, styles.halfBtnGhost, { opacity: pressed ? 0.75 : 1 }]}
+                        onPress={() => onCollectCash(booking)}
+                      >
+                        <Ionicons name="cash-outline" size={14} color={Colors.textSecondary} style={{ marginRight: 4 }} />
+                        <Text style={[styles.halfBtnText, { color: Colors.textSecondary, fontSize: 11 }]}>COLLECT CASH</Text>
+                      </Pressable>
+                    </View>
+                  </>
+                )
               )}
 
               {/* Paused → Resume + Return */}
@@ -294,14 +378,16 @@ export function RentalCard({ booking, onDispatch, onCollectCash, onPause, onResu
                 </View>
               )}
 
-              {/* Collect cash — always */}
-              <Pressable
-                style={({ pressed }) => [styles.ghostBtn, { opacity: pressed ? 0.75 : 1 }]}
-                onPress={() => onCollectCash(booking)}
-              >
-                <Ionicons name="cash-outline" size={14} color={Colors.textSecondary} style={{ marginRight: 6 }} />
-                <Text style={styles.ghostBtnText}>COLLECT CASH</Text>
-              </Pressable>
+              {/* Collect cash for non-active bookings (Draft / Paused) */}
+              {!isActive && (
+                <Pressable
+                  style={({ pressed }) => [styles.ghostBtn, { opacity: pressed ? 0.75 : 1 }]}
+                  onPress={() => onCollectCash(booking)}
+                >
+                  <Ionicons name="cash-outline" size={14} color={Colors.textSecondary} style={{ marginRight: 6 }} />
+                  <Text style={styles.ghostBtnText}>COLLECT CASH</Text>
+                </Pressable>
+              )}
             </>
           )}
         </View>
@@ -525,6 +611,16 @@ const styles = StyleSheet.create({
   halfBtnOrange: { backgroundColor: Colors.statusWarning },
   halfBtnTeal:   { backgroundColor: Colors.brandTeal },
   halfBtnGreen:  { backgroundColor: Colors.statusActive },
+  halfBtnOutlineTeal: {
+    backgroundColor: Colors.surfaceCard,
+    borderWidth: 1.5,
+    borderColor: Colors.brandTeal,
+  },
+  halfBtnGhost: {
+    backgroundColor: Colors.surfaceCard,
+    borderWidth: 1,
+    borderColor: Colors.borderLight,
+  },
   halfBtnText:   { ...Typography.buttonPrimary, fontSize: 12, letterSpacing: 0.3 },
 
   ghostBtn: {

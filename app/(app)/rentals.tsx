@@ -481,6 +481,7 @@ export default function RentalsScreen() {
         onSuccess={invalidate}
         storeId={storeId ?? ''}
         operatorId={operatorId}
+        onSwitchToRenew={(b) => setRenewTarget(b)}
       />
       <PauseModal
         visible={!!pauseTarget}

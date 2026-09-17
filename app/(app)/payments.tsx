@@ -9,8 +9,9 @@ import React, { useMemo, useState } from 'react';
 import { FlatList, Pressable, RefreshControl, SafeAreaView, StyleSheet, Text, View } from 'react-native';
 import { Colors, Radius, Spacing, Typography } from '../../src/constants/design';
 import { PaymentModal } from '../../src/components/modals/PaymentModal';
+import { RenewModal } from '../../src/components/modals/RenewModal';
 import { EmptyState, ErrorBanner, KPICard, SkeletonCard } from '../../src/components/ui';
-import { useBookings, queryKeys } from '../../src/hooks/useQueries';
+import { useBookings, useVehicles, useBatteries, useGlobalConfig, queryKeys } from '../../src/hooks/useQueries';
 import { useAuthStore } from '../../src/stores/authStore';
 import { useStoreSelectionStore } from '../../src/stores/storeSelectionStore';
 import { calculatePaymentGate, formatCurrency, toNodeId, parseLocalDate, getEffectiveEndDate } from '../../src/services/bookingService';
@@ -24,7 +25,14 @@ export default function PaymentsScreen() {
   const queryClient = useQueryClient();
 
   const { data: bookings, isLoading, error, refetch } = useBookings(storeId);
+  const { data: vehicles } = useVehicles(storeId);
+  const { data: batteries } = useBatteries(storeId);
+  const { data: globalConfig } = useGlobalConfig();
   const [paymentTarget, setPaymentTarget] = useState<BookingWithDetails | null>(null);
+  const [renewTarget, setRenewTarget] = useState<BookingWithDetails | null>(null);
+
+  const availableVehicles = useMemo(() => (vehicles ?? []).filter((v) => v.status === 'Available'), [vehicles]);
+  const availableBatteries = useMemo(() => (batteries ?? []).filter((b) => b.status === 'Available'), [batteries]);
 
   const paymentQueue = useMemo(() => {
     if (!bookings) return [];
@@ -181,13 +189,32 @@ export default function PaymentsScreen() {
                 <Text style={[Typography.bodyPrimary, { fontWeight: '800', color: Colors.textOrange }]}>
                   {formatCurrency(displayBalance)}
                 </Text>
-                <Pressable
-                  style={({ pressed }) => [styles.actionBtn, { opacity: pressed ? 0.7 : 1 }]}
-                  onPress={() => setPaymentTarget(booking)}
-                  accessibilityLabel={`Collect from ${booking.customer.name}`}
-                >
-                  <Ionicons name="cash-outline" size={20} color={Colors.textOrange} />
-                </Pressable>
+                <View style={{ flexDirection: 'row', gap: 6, alignItems: 'center' }}>
+                  {daysLate > 0 && (
+                    <Pressable
+                      style={({ pressed }) => [
+                        styles.actionBtn,
+                        {
+                          backgroundColor: Colors.brandTeal,
+                          borderColor: Colors.brandTeal,
+                          borderWidth: 1,
+                          opacity: pressed ? 0.7 : 1,
+                        },
+                      ]}
+                      onPress={() => setRenewTarget(booking)}
+                      accessibilityLabel={`Renew ${booking.customer.name}`}
+                    >
+                      <Ionicons name="refresh-outline" size={18} color={Colors.brandNavy} />
+                    </Pressable>
+                  )}
+                  <Pressable
+                    style={({ pressed }) => [styles.actionBtn, { opacity: pressed ? 0.7 : 1 }]}
+                    onPress={() => setPaymentTarget(booking)}
+                    accessibilityLabel={`Collect from ${booking.customer.name}`}
+                  >
+                    <Ionicons name="cash-outline" size={20} color={Colors.textOrange} />
+                  </Pressable>
+                </View>
               </View>
             </View>
           )}
@@ -201,6 +228,19 @@ export default function PaymentsScreen() {
         onSuccess={() => { setPaymentTarget(null); invalidate(); }}
         storeId={storeId ?? ''}
         operatorId={operatorId}
+        onSwitchToRenew={(b) => setRenewTarget(b)}
+      />
+
+      <RenewModal
+        visible={!!renewTarget}
+        booking={renewTarget}
+        onClose={() => setRenewTarget(null)}
+        onSuccess={() => { setRenewTarget(null); invalidate(); }}
+        storeId={storeId ?? ''}
+        operatorId={operatorId}
+        availableVehicles={availableVehicles}
+        availableBatteries={availableBatteries}
+        globalConfig={globalConfig ?? null}
       />
     </SafeAreaView>
   );
