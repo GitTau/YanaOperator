@@ -18,15 +18,8 @@
 -- ─────────────────────────────────────────────────────────────────────────────
 
 -- ── 1. USER ROLE EXTENSION ───────────────────────────────────────────────────
-DO $$
-BEGIN
-  IF NOT EXISTS (
-    SELECT 1 FROM pg_enum 
-    WHERE enumtypid = 'public.user_role'::regtype AND enumlabel = 'MECHANIC'
-  ) THEN
-    ALTER TYPE public.user_role ADD VALUE 'MECHANIC';
-  END IF;
-END $$;
+-- Note: 'MECHANIC' is added and committed in a separate transaction:
+-- ALTER TYPE public.user_role ADD VALUE IF NOT EXISTS 'MECHANIC';
 
 -- ── 2. VEHICLE EXTENSIONS ─────────────────────────────────────────────────────
 ALTER TABLE public.vehicles
@@ -92,7 +85,7 @@ CREATE INDEX IF NOT EXISTS idx_part_compatibility_model ON public.part_model_com
 -- ── 5. STORE INVENTORY (Per-store physical stock) ────────────────────────────
 CREATE TABLE IF NOT EXISTS public.store_inventory (
   id uuid PRIMARY KEY DEFAULT gen_random_uuid(),
-  store_id uuid NOT NULL REFERENCES public.stores(id) ON DELETE CASCADE,
+  store_id uuid NOT NULL REFERENCES public.stores(store_id) ON DELETE CASCADE,
   part_id uuid NOT NULL REFERENCES public.parts_catalog(id) ON DELETE CASCADE,
   condition text NOT NULL DEFAULT 'NEW' CHECK (condition IN ('NEW', 'REFURBISHED', 'SALVAGED')),
   quantity_on_hand integer NOT NULL DEFAULT 0 CHECK (quantity_on_hand >= 0),
@@ -108,7 +101,7 @@ CREATE INDEX IF NOT EXISTS idx_store_inventory_part ON public.store_inventory(pa
 -- ── 6. APPEND-ONLY INVENTORY TRANSACTION LEDGER ──────────────────────────────
 CREATE TABLE IF NOT EXISTS public.inventory_transactions (
   id uuid PRIMARY KEY DEFAULT gen_random_uuid(),
-  store_id uuid NOT NULL REFERENCES public.stores(id) ON DELETE CASCADE,
+  store_id uuid NOT NULL REFERENCES public.stores(store_id) ON DELETE CASCADE,
   part_id uuid NOT NULL REFERENCES public.parts_catalog(id) ON DELETE CASCADE,
   condition text NOT NULL DEFAULT 'NEW' CHECK (condition IN ('NEW', 'REFURBISHED', 'SALVAGED')),
   transaction_type text NOT NULL CHECK (transaction_type IN (
@@ -120,10 +113,10 @@ CREATE TABLE IF NOT EXISTS public.inventory_transactions (
   unit_cost numeric(10,2) NOT NULL DEFAULT 0.00,
   job_card_id uuid,          -- populated if consumed on repair
   donor_vehicle_id uuid REFERENCES public.vehicles(id) ON DELETE SET NULL, -- if salvaged
-  target_store_id uuid REFERENCES public.stores(id) ON DELETE SET NULL,   -- if transfer
+  target_store_id uuid REFERENCES public.stores(store_id) ON DELETE SET NULL,   -- if transfer
   purchase_request_id uuid,  -- if fulfilled from purchase request
   notes text,
-  performed_by uuid REFERENCES public.users(id) ON DELETE SET NULL,
+  performed_by uuid REFERENCES auth.users(id) ON DELETE SET NULL,
   created_at timestamptz NOT NULL DEFAULT now()
 );
 
@@ -139,7 +132,7 @@ CREATE TABLE IF NOT EXISTS public.job_cards (
   id uuid PRIMARY KEY DEFAULT gen_random_uuid(),
   job_card_number text NOT NULL UNIQUE DEFAULT ('JC-' || to_char(now(), 'YYYYMM') || '-' || lpad(nextval('public.job_card_number_seq')::text, 4, '0')),
   vehicle_id uuid NOT NULL REFERENCES public.vehicles(id) ON DELETE RESTRICT,
-  store_id uuid NOT NULL REFERENCES public.stores(id) ON DELETE RESTRICT,
+  store_id uuid NOT NULL REFERENCES public.stores(store_id) ON DELETE RESTRICT,
   trigger_type text NOT NULL DEFAULT 'CAPTAIN_REPORT' CHECK (trigger_type IN ('CAPTAIN_REPORT', 'PERIODIC_SOP', 'RIDER_INCIDENT', 'BREAKDOWN')),
   reported_issue text NOT NULL,
   severity text NOT NULL DEFAULT 'MINOR' CHECK (severity IN ('MINOR', 'MAJOR', 'CRITICAL')),
@@ -156,9 +149,9 @@ CREATE TABLE IF NOT EXISTS public.job_cards (
   labour_cost numeric(10,2) NOT NULL DEFAULT 0.00,
   parts_cost numeric(10,2) NOT NULL DEFAULT 0.00,
   total_cost numeric(10,2) GENERATED ALWAYS AS (labour_cost + parts_cost) STORED,
-  reported_by uuid REFERENCES public.users(id) ON DELETE SET NULL,
-  assigned_mechanic_id uuid REFERENCES public.users(id) ON DELETE SET NULL,
-  qc_inspector_id uuid REFERENCES public.users(id) ON DELETE SET NULL,
+  reported_by uuid REFERENCES auth.users(id) ON DELETE SET NULL,
+  assigned_mechanic_id uuid REFERENCES auth.users(id) ON DELETE SET NULL,
+  qc_inspector_id uuid REFERENCES auth.users(id) ON DELETE SET NULL,
   created_at timestamptz NOT NULL DEFAULT now(),
   updated_at timestamptz NOT NULL DEFAULT now(),
   closed_at timestamptz
@@ -180,7 +173,7 @@ CREATE TABLE IF NOT EXISTS public.job_card_parts (
   donor_vehicle_id uuid REFERENCES public.vehicles(id) ON DELETE SET NULL,
   inventory_transaction_id uuid REFERENCES public.inventory_transactions(id) ON DELETE SET NULL,
   unit_cost numeric(10,2) NOT NULL DEFAULT 0.00,
-  installed_by uuid REFERENCES public.users(id) ON DELETE SET NULL,
+  installed_by uuid REFERENCES auth.users(id) ON DELETE SET NULL,
   installed_at timestamptz NOT NULL DEFAULT now()
 );
 
@@ -196,7 +189,7 @@ CREATE TABLE IF NOT EXISTS public.vehicle_donor_history (
   job_card_id uuid REFERENCES public.job_cards(id) ON DELETE SET NULL,
   condition text NOT NULL DEFAULT 'SALVAGED' CHECK (condition IN ('REFURBISHED', 'SALVAGED')),
   notes text,
-  removed_by uuid REFERENCES public.users(id) ON DELETE SET NULL,
+  removed_by uuid REFERENCES auth.users(id) ON DELETE SET NULL,
   harvested_at timestamptz NOT NULL DEFAULT now()
 );
 
@@ -209,13 +202,13 @@ CREATE SEQUENCE IF NOT EXISTS public.purchase_request_number_seq START WITH 1001
 CREATE TABLE IF NOT EXISTS public.purchase_requests (
   id uuid PRIMARY KEY DEFAULT gen_random_uuid(),
   request_number text NOT NULL UNIQUE DEFAULT ('PR-' || to_char(now(), 'YYYYMM') || '-' || lpad(nextval('public.purchase_request_number_seq')::text, 4, '0')),
-  store_id uuid NOT NULL REFERENCES public.stores(id) ON DELETE RESTRICT,
+  store_id uuid NOT NULL REFERENCES public.stores(store_id) ON DELETE RESTRICT,
   part_id uuid NOT NULL REFERENCES public.parts_catalog(id) ON DELETE RESTRICT,
   quantity_requested integer NOT NULL CHECK (quantity_requested > 0),
   status text NOT NULL DEFAULT 'PENDING' CHECK (status IN ('PENDING', 'APPROVED', 'REJECTED', 'FULFILLED', 'CANCELLED')),
   reason text,
-  requested_by uuid REFERENCES public.users(id) ON DELETE SET NULL,
-  approved_by uuid REFERENCES public.users(id) ON DELETE SET NULL,
+  requested_by uuid REFERENCES auth.users(id) ON DELETE SET NULL,
+  approved_by uuid REFERENCES auth.users(id) ON DELETE SET NULL,
   created_at timestamptz NOT NULL DEFAULT now(),
   updated_at timestamptz NOT NULL DEFAULT now(),
   fulfilled_at timestamptz
@@ -655,68 +648,68 @@ CREATE POLICY "Allow read access to vehicle makes"
 
 CREATE POLICY "Allow admin write access to vehicle makes"
   ON public.vehicle_makes FOR ALL TO authenticated
-  USING ((SELECT role FROM public.users WHERE id = auth.uid()) = 'ADMIN');
+  USING ((SELECT role FROM public.profiles WHERE id = auth.uid()) = 'ADMIN');
 
 CREATE POLICY "Allow read access to vehicle models"
   ON public.vehicle_models FOR SELECT TO authenticated USING (true);
 
 CREATE POLICY "Allow admin write access to vehicle models"
   ON public.vehicle_models FOR ALL TO authenticated
-  USING ((SELECT role FROM public.users WHERE id = auth.uid()) = 'ADMIN');
+  USING ((SELECT role FROM public.profiles WHERE id = auth.uid()) = 'ADMIN');
 
 CREATE POLICY "Allow read access to parts catalog"
   ON public.parts_catalog FOR SELECT TO authenticated USING (true);
 
 CREATE POLICY "Allow admin write access to parts catalog"
   ON public.parts_catalog FOR ALL TO authenticated
-  USING ((SELECT role FROM public.users WHERE id = auth.uid()) = 'ADMIN');
+  USING ((SELECT role FROM public.profiles WHERE id = auth.uid()) = 'ADMIN');
 
 CREATE POLICY "Allow read access to part compatibility"
   ON public.part_model_compatibility FOR SELECT TO authenticated USING (true);
 
 CREATE POLICY "Allow admin write access to part compatibility"
   ON public.part_model_compatibility FOR ALL TO authenticated
-  USING ((SELECT role FROM public.users WHERE id = auth.uid()) = 'ADMIN');
+  USING ((SELECT role FROM public.profiles WHERE id = auth.uid()) = 'ADMIN');
 
 -- Store Inventory: readable by Admin or users assigned to that store
 CREATE POLICY "Store inventory read policy"
   ON public.store_inventory FOR SELECT TO authenticated
   USING (
-    (SELECT role FROM public.users WHERE id = auth.uid()) = 'ADMIN'
-    OR store_id = (SELECT store_id FROM public.users WHERE id = auth.uid())
+    (SELECT role FROM public.profiles WHERE id = auth.uid()) = 'ADMIN'
+    OR store_id = (SELECT store_id FROM public.profiles WHERE id = auth.uid())
   );
 
 CREATE POLICY "Store inventory admin write policy"
   ON public.store_inventory FOR ALL TO authenticated
-  USING ((SELECT role FROM public.users WHERE id = auth.uid()) = 'ADMIN');
+  USING ((SELECT role FROM public.profiles WHERE id = auth.uid()) = 'ADMIN');
 
 -- Inventory Transactions: readable by Admin or own store users
 CREATE POLICY "Inventory transactions read policy"
   ON public.inventory_transactions FOR SELECT TO authenticated
   USING (
-    (SELECT role FROM public.users WHERE id = auth.uid()) = 'ADMIN'
-    OR store_id = (SELECT store_id FROM public.users WHERE id = auth.uid())
+    (SELECT role FROM public.profiles WHERE id = auth.uid()) = 'ADMIN'
+    OR store_id = (SELECT store_id FROM public.profiles WHERE id = auth.uid())
   );
 
 -- Job Cards: readable and updatable by Admin, store Operators, and store Mechanics
 CREATE POLICY "Job cards select policy"
   ON public.job_cards FOR SELECT TO authenticated
   USING (
-    (SELECT role FROM public.users WHERE id = auth.uid()) = 'ADMIN'
-    OR store_id = (SELECT store_id FROM public.users WHERE id = auth.uid())
+    (SELECT role FROM public.profiles WHERE id = auth.uid()) = 'ADMIN'
+    OR store_id = (SELECT store_id FROM public.profiles WHERE id = auth.uid())
   );
 
 CREATE POLICY "Job cards insert policy"
   ON public.job_cards FOR INSERT TO authenticated
   WITH CHECK (
-    (SELECT role FROM public.users WHERE id = auth.uid()) IN ('ADMIN', 'OPERATOR', 'MECHANIC')
+    (SELECT role FROM public.profiles WHERE id = auth.uid()) IN ('ADMIN', 'OPERATOR', 'MECHANIC')
   );
 
 CREATE POLICY "Job cards update policy"
   ON public.job_cards FOR UPDATE TO authenticated
   USING (
-    (SELECT role FROM public.users WHERE id = auth.uid()) = 'ADMIN'
-    OR store_id = (SELECT store_id FROM public.users WHERE id = auth.uid())
+    (SELECT role FROM public.profiles WHERE id = auth.uid()) = 'ADMIN'
+    OR store_id = (SELECT store_id FROM public.profiles WHERE id = auth.uid())
   );
 
 -- Job Card Parts: readable and insertable by store staff
@@ -726,7 +719,7 @@ CREATE POLICY "Job card parts select policy"
 CREATE POLICY "Job card parts insert policy"
   ON public.job_card_parts FOR INSERT TO authenticated
   WITH CHECK (
-    (SELECT role FROM public.users WHERE id = auth.uid()) IN ('ADMIN', 'OPERATOR', 'MECHANIC')
+    (SELECT role FROM public.profiles WHERE id = auth.uid()) IN ('ADMIN', 'OPERATOR', 'MECHANIC')
   );
 
 -- Donor History: readable by authenticated users
@@ -737,21 +730,21 @@ CREATE POLICY "Donor history select policy"
 CREATE POLICY "Purchase requests select policy"
   ON public.purchase_requests FOR SELECT TO authenticated
   USING (
-    (SELECT role FROM public.users WHERE id = auth.uid()) = 'ADMIN'
-    OR store_id = (SELECT store_id FROM public.users WHERE id = auth.uid())
+    (SELECT role FROM public.profiles WHERE id = auth.uid()) = 'ADMIN'
+    OR store_id = (SELECT store_id FROM public.profiles WHERE id = auth.uid())
   );
 
 CREATE POLICY "Purchase requests insert policy"
   ON public.purchase_requests FOR INSERT TO authenticated
   WITH CHECK (
-    (SELECT role FROM public.users WHERE id = auth.uid()) IN ('ADMIN', 'OPERATOR', 'MECHANIC')
+    (SELECT role FROM public.profiles WHERE id = auth.uid()) IN ('ADMIN', 'OPERATOR', 'MECHANIC')
   );
 
 CREATE POLICY "Purchase requests update policy"
   ON public.purchase_requests FOR UPDATE TO authenticated
   USING (
-    (SELECT role FROM public.users WHERE id = auth.uid()) = 'ADMIN'
-    OR store_id = (SELECT store_id FROM public.users WHERE id = auth.uid())
+    (SELECT role FROM public.profiles WHERE id = auth.uid()) = 'ADMIN'
+    OR store_id = (SELECT store_id FROM public.profiles WHERE id = auth.uid())
   );
 
 -- ── 13. SECURITY HARDENING ───────────────────────────────────────────────────
