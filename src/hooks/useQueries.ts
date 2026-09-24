@@ -6,8 +6,16 @@
 
 import React, { useEffect } from 'react';
 import { useQuery, useQueryClient } from '@tanstack/react-query';
-import type { Captain } from '../lib/database.types';
+import type { Captain, JobCard, StoreInventory, PartCatalog } from '../lib/database.types';
 import { supabase } from '../lib/supabase';
+import {
+  fetchJobCardsService,
+  fetchJobCardByIdService,
+  fetchStoreInventoryService,
+  fetchPartsCatalogService,
+  fetchDonorVehiclesService,
+  fetchVehicleMaintenanceTimelineService,
+} from '../services/bookingService';
 
 const POLL_INTERVAL = 30_000; // 30 seconds
 
@@ -22,6 +30,13 @@ export const queryKeys = {
   bookingsWithDetails: (storeId: string) => ['bookings', storeId, 'details'] as const,
   maintenanceJobs: (storeId: string) => ['maintenance_jobs', storeId] as const,
   globalConfig: ['global_config'] as const,
+  // Maintenance & Inventory keys
+  jobCards: (storeId: string, status?: string) => ['job_cards', storeId, status ?? 'ALL'] as const,
+  jobCardDetail: (id: string) => ['job_card_detail', id] as const,
+  storeInventory: (storeId: string) => ['store_inventory', storeId] as const,
+  partsCatalog: ['parts_catalog'] as const,
+  donorVehicles: (storeId: string) => ['donor_vehicles', storeId] as const,
+  vehicleTimeline: (vehicleId: string) => ['vehicle_timeline', vehicleId] as const,
   // Appraisal / Task keys
   activeCycle: ['active_cycle'] as const,
   captainByStore: (storeId: string) => ['captain_by_store', storeId] as const,
@@ -609,3 +624,61 @@ export function useMyNotifications(storeId: string | null, captainId: string | n
     },
   });
 }
+
+// ── Maintenance & Inventory Hooks (v1) ────────────────────────────────────────
+
+/** Fetches Job Cards for a store, optionally filtered by status. */
+export function useJobCards(storeId: string | null, statusFilter?: string) {
+  return useQuery<JobCard[]>({
+    queryKey: queryKeys.jobCards(storeId ?? '', statusFilter),
+    enabled: !!storeId,
+    refetchInterval: POLL_INTERVAL,
+    queryFn: () => fetchJobCardsService(storeId, statusFilter),
+  });
+}
+
+/** Fetches full detail for a single Job Card. */
+export function useJobCardDetail(jobCardId: string | null) {
+  return useQuery<JobCard>({
+    queryKey: queryKeys.jobCardDetail(jobCardId ?? ''),
+    enabled: !!jobCardId,
+    queryFn: () => fetchJobCardByIdService(jobCardId!),
+  });
+}
+
+/** Fetches store parts inventory with stock levels and reorder limits. */
+export function useStorePartsInventory(storeId: string | null) {
+  return useQuery<StoreInventory[]>({
+    queryKey: queryKeys.storeInventory(storeId ?? ''),
+    enabled: !!storeId,
+    refetchInterval: POLL_INTERVAL,
+    queryFn: () => fetchStoreInventoryService(storeId!),
+  });
+}
+
+/** Fetches global active parts catalogue. */
+export function usePartsCatalog() {
+  return useQuery<PartCatalog[]>({
+    queryKey: queryKeys.partsCatalog,
+    queryFn: () => fetchPartsCatalogService(),
+  });
+}
+
+/** Fetches eligible donor vehicles in the store for component salvaging. */
+export function useDonorVehicles(storeId: string | null, currentVehicleId?: string) {
+  return useQuery({
+    queryKey: queryKeys.donorVehicles(storeId ?? ''),
+    enabled: !!storeId,
+    queryFn: () => fetchDonorVehiclesService(storeId!, currentVehicleId),
+  });
+}
+
+/** Fetches historical maintenance events and Job Cards for a specific vehicle. */
+export function useVehicleMaintenanceTimeline(vehicleId: string | null) {
+  return useQuery<JobCard[]>({
+    queryKey: queryKeys.vehicleTimeline(vehicleId ?? ''),
+    enabled: !!vehicleId,
+    queryFn: () => fetchVehicleMaintenanceTimelineService(vehicleId!),
+  });
+}
+

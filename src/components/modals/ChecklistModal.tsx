@@ -30,6 +30,7 @@ import type { BookingWithDetails } from '../../lib/database.types';
 import { useChecklistTemplate } from '../../hooks/useQueries';
 import type { ChecklistTemplateItem } from '../../hooks/useQueries';
 import {
+  createJobCardService,
   formatCurrency,
   openMaintenanceTicket,
   saveVehicleChecklist,
@@ -178,12 +179,25 @@ export function ChecklistModal({
         });
       const description = `Flagged during ${checklistType}: ${affectedItems.join(', ')}`;
 
-      // 3. Open Maintenance Ticket
+      // 3. Open Maintenance Ticket & Create Formal Job Card
       await openMaintenanceTicket({
         vehicleId: booking.vehicle_id,
         storeId:   booking.store_id,
         description,
       });
+
+      try {
+        await createJobCardService({
+          p_vehicle_id: booking.vehicle_id,
+          p_store_id: booking.store_id,
+          p_trigger_type: 'CAPTAIN_REPORT',
+          p_reported_issue: description,
+          p_severity: hasDamage ? 'MAJOR' : 'MINOR',
+          p_priority: hasDamage ? 'HIGH' : 'NORMAL',
+        });
+      } catch (jcErr) {
+        console.warn('[ChecklistModal] Job Card creation logged:', jcErr);
+      }
 
       setShowRaiseTicket(false);
       onComplete(hasIssues, totalDamageFines);
@@ -256,11 +270,11 @@ export function ChecklistModal({
               </View>
             )}
 
-            <Text style={styles.ticketQuestion}>Raise a maintenance ticket for this vehicle?</Text>
+            <Text style={styles.ticketQuestion}>Create a Job Card for the Maintenance Bay?</Text>
             <Text style={styles.ticketHint}>
               {hasDamage
-                ? 'Damaged items are flagged for maintenance. Ride will close after confirmation.'
-                : 'Issues flagged — supervisor will review. Vehicle stays active for now.'}
+                ? 'Damaged vehicle will be transferred to Maintenance Bay. Ride will close after confirmation.'
+                : 'Issues flagged — supervisor and mechanic will review. Vehicle stays active for now.'}
             </Text>
 
             <View style={styles.ticketActions}>
@@ -284,7 +298,7 @@ export function ChecklistModal({
                 ) : (
                   <>
                     <Ionicons name="construct-outline" size={15} color="#fff" style={{ marginRight: 6 }} />
-                    <Text style={[styles.ticketBtnText, { color: '#fff' }]}>Yes — Raise Ticket</Text>
+                    <Text style={[styles.ticketBtnText, { color: '#fff' }]}>Yes — Create Job Card</Text>
                   </>
                 )}
               </Pressable>

@@ -99,6 +99,12 @@ export function YanaHeader({ storeName, role, onSignOut, isEodTime = false }: Ya
     }
   };
 
+  const isMechanic = role === 'MECHANIC';
+  const menuItems = MENU_ITEMS.filter(item => {
+    if (isMechanic && (item.id === 'performance' || item.id === 'tasks')) return false;
+    return true;
+  });
+
   return (
     <>
       <View style={[styles.header, { paddingTop: Math.max(insets.top, 10) }]}>
@@ -120,29 +126,31 @@ export function YanaHeader({ storeName, role, onSignOut, isEodTime = false }: Ya
             </View>
           )}
 
-          {/* EOD / Operator button */}
-          <Animated.View style={{ transform: [{ scale: isEodTime ? pulseAnim : 1 }] }}>
-            <Pressable
-              onPress={() => router.push('/(app)/eod' as Parameters<typeof router.push>[0])}
-              style={({ pressed }) => [
-                styles.eodBtn,
-                isEodTime && styles.eodBtnActive,
-                { opacity: pressed ? 0.8 : 1 },
-              ]}
-              accessibilityLabel={isEodTime ? 'View EOD Report — ready for download' : 'View EOD Report'}
-              accessibilityRole="button"
-            >
-              <Ionicons
-                name={isEodTime ? 'document-text' : 'document-text-outline'}
-                size={12}
-                color={isEodTime ? '#fff' : Colors.textSecondary}
-                style={{ marginRight: 4 }}
-              />
-              <Text style={[styles.eodBtnText, isEodTime && styles.eodBtnTextActive]}>
-                {isEodTime ? 'EOD ●' : 'Operator'}
-              </Text>
-            </Pressable>
-          </Animated.View>
+          {/* EOD / Operator button — Captains only */}
+          {!isMechanic && (
+            <Animated.View style={{ transform: [{ scale: isEodTime ? pulseAnim : 1 }] }}>
+              <Pressable
+                onPress={() => router.push('/(app)/eod' as Parameters<typeof router.push>[0])}
+                style={({ pressed }) => [
+                  styles.eodBtn,
+                  isEodTime && styles.eodBtnActive,
+                  { opacity: pressed ? 0.8 : 1 },
+                ]}
+                accessibilityLabel={isEodTime ? 'View EOD Report — ready for download' : 'View EOD Report'}
+                accessibilityRole="button"
+              >
+                <Ionicons
+                  name={isEodTime ? 'document-text' : 'document-text-outline'}
+                  size={12}
+                  color={isEodTime ? '#fff' : Colors.textSecondary}
+                  style={{ marginRight: 4 }}
+                />
+                <Text style={[styles.eodBtnText, isEodTime && styles.eodBtnTextActive]}>
+                  {isEodTime ? 'EOD ●' : 'Operator'}
+                </Text>
+              </Pressable>
+            </Animated.View>
+          )}
 
           {/* Notifications bell button */}
           <Pressable
@@ -180,7 +188,7 @@ export function YanaHeader({ storeName, role, onSignOut, isEodTime = false }: Ya
             <View style={styles.backdrop} />
           </TouchableWithoutFeedback>
           <Animated.View style={[styles.dropdown, { opacity: fadeAnim }]}>
-            {MENU_ITEMS.map((item, idx) => {
+            {menuItems.map((item, idx) => {
               const isSignOut = item.id === 'signout';
               return (
                 <Pressable

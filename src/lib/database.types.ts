@@ -10,7 +10,7 @@
 //   Fleet asset   → vehicles / batteries
 // ─────────────────────────────────────────────────────────────────────────────
 
-export type UserRole = 'ADMIN' | 'OPERATOR' | 'RIDER';
+export type UserRole = 'ADMIN' | 'OPERATOR' | 'RIDER' | 'MECHANIC';
 export type VehicleStatus = 'Available' | 'In Use' | 'Maintenance' | 'Inactive';
 export type BatteryStatus = 'Available' | 'In Use' | 'Maintenance';
 export type ChargerStatus = 'Available' | 'In Use' | 'Maintenance';
@@ -59,6 +59,7 @@ export interface Vehicle {
   plate_number: string; // e.g. XEM01
   status: VehicleStatus;
   assigned_battery_id: string | null;
+  odometer_km?: number;
   created_at: string;
 }
 
@@ -239,6 +240,187 @@ export interface AppNotification {
   created_at: string | null;
 }
 
+// ── Maintenance & Inventory Master (v1) ──────────────────────────────────
+export type PartCategory =
+  | 'BRAKES'
+  | 'ELECTRICAL'
+  | 'DRIVE_MOTOR'
+  | 'BODY_CHASSIS'
+  | 'WHEELS_TIRES'
+  | 'SUSPENSION'
+  | 'LOCKS_KEYS'
+  | 'CONSUMABLES'
+  | 'ACCESSORIES';
+
+export type PartCondition = 'NEW' | 'REFURBISHED' | 'SALVAGED';
+
+export type InventoryTransactionType =
+  | 'PURCHASE_INWARD'
+  | 'JOB_CARD_CONSUMED'
+  | 'SALVAGED_INWARD'
+  | 'TRANSFER_IN'
+  | 'TRANSFER_OUT'
+  | 'AUDIT_ADJUSTMENT'
+  | 'SCRAPPED';
+
+export type JobCardStatus =
+  | 'OPEN'
+  | 'ASSIGNED'
+  | 'IN_PROGRESS'
+  | 'WAITING_FOR_PARTS'
+  | 'READY_FOR_TEST'
+  | 'READY_FOR_DEPLOYMENT'
+  | 'CLOSED'
+  | 'CANCELLED';
+
+export type JobCardSeverity = 'MINOR' | 'MAJOR' | 'CRITICAL';
+export type JobCardPriority = 'LOW' | 'NORMAL' | 'HIGH' | 'URGENT';
+export type JobCardTrigger = 'CAPTAIN_REPORT' | 'PERIODIC_SOP' | 'RIDER_INCIDENT' | 'BREAKDOWN';
+export type PartSourceType = 'INVENTORY' | 'SALVAGED_DIRECT' | 'SALVAGED_INVENTORY';
+export type PurchaseRequestStatus = 'PENDING' | 'APPROVED' | 'REJECTED' | 'FULFILLED' | 'CANCELLED';
+
+export interface VehicleMake {
+  id: string;
+  name: string;
+  created_at: string;
+}
+
+export interface VehicleModel {
+  id: string;
+  make_id: string;
+  name: string;
+  created_at: string;
+}
+
+export interface PartCatalog {
+  id: string;
+  part_code: string;
+  name: string;
+  category: PartCategory;
+  subpart: string | null;
+  unit: string;
+  base_price: number;
+  gst_rate: number;
+  mrp: number;
+  is_active: boolean;
+  created_at: string;
+  updated_at: string;
+}
+
+export interface PartModelCompatibility {
+  id: string;
+  part_id: string;
+  model_id: string;
+  notes: string | null;
+}
+
+export interface StoreInventory {
+  id: string;
+  store_id: string;
+  part_id: string;
+  condition: PartCondition;
+  quantity_on_hand: number;
+  reorder_level: number;
+  reorder_quantity: number;
+  updated_at: string;
+  part?: PartCatalog;
+}
+
+export interface InventoryTransaction {
+  id: string;
+  store_id: string;
+  part_id: string;
+  condition: PartCondition;
+  transaction_type: InventoryTransactionType;
+  quantity: number;
+  balance_after: number;
+  unit_cost: number;
+  job_card_id: string | null;
+  donor_vehicle_id: string | null;
+  target_store_id: string | null;
+  purchase_request_id: string | null;
+  notes: string | null;
+  performed_by: string | null;
+  created_at: string;
+  part?: PartCatalog;
+  donor_vehicle?: Vehicle;
+}
+
+export interface JobCard {
+  id: string;
+  job_card_number: string;
+  vehicle_id: string;
+  store_id: string;
+  trigger_type: JobCardTrigger;
+  reported_issue: string;
+  severity: JobCardSeverity;
+  priority: JobCardPriority;
+  status: JobCardStatus;
+  odometer_km: number;
+  diagnosis: string | null;
+  repair_notes: string | null;
+  roadworthiness_confirmed: boolean;
+  final_test_notes: string | null;
+  labour_cost: number;
+  parts_cost: number;
+  total_cost: number;
+  reported_by: string | null;
+  assigned_mechanic_id: string | null;
+  qc_inspector_id: string | null;
+  created_at: string;
+  updated_at: string;
+  closed_at: string | null;
+  vehicle?: Vehicle;
+  parts?: JobCardPart[];
+}
+
+export interface JobCardPart {
+  id: string;
+  job_card_id: string;
+  part_id: string;
+  quantity: number;
+  source_type: PartSourceType;
+  condition: PartCondition;
+  donor_vehicle_id: string | null;
+  inventory_transaction_id: string | null;
+  unit_cost: number;
+  installed_by: string | null;
+  installed_at: string;
+  part?: PartCatalog;
+  donor_vehicle?: Vehicle;
+}
+
+export interface VehicleDonorHistory {
+  id: string;
+  donor_vehicle_id: string;
+  part_id: string;
+  recipient_vehicle_id: string | null;
+  job_card_id: string | null;
+  condition: PartCondition;
+  notes: string | null;
+  removed_by: string | null;
+  harvested_at: string;
+  part?: PartCatalog;
+  donor_vehicle?: Vehicle;
+  recipient_vehicle?: Vehicle;
+}
+
+export interface PurchaseRequest {
+  id: string;
+  request_number: string;
+  store_id: string;
+  part_id: string;
+  quantity_requested: number;
+  status: PurchaseRequestStatus;
+  reason: string | null;
+  requested_by: string | null;
+  approved_by: string | null;
+  created_at: string;
+  updated_at: string;
+  fulfilled_at: string | null;
+  part?: PartCatalog;
+}
+
 // ── RPC parameters ───────────────────────────────────────────────────────────
 export interface CreateBookingParams {
   p_customer_id: string;
@@ -281,6 +463,58 @@ export interface SwapAssetsParams {
   p_operator_id: string;
 }
 
+export interface CreateJobCardParams {
+  p_vehicle_id: string;
+  p_store_id: string;
+  p_trigger_type: string;
+  p_reported_issue: string;
+  p_severity: string;
+  p_priority?: string;
+  p_odometer_km?: number;
+  p_notes?: string | null;
+}
+
+export interface ConsumeJobCardPartParams {
+  p_job_card_id: string;
+  p_part_id: string;
+  p_quantity?: number;
+  p_condition?: string;
+}
+
+export interface RecordSalvagedPartParams {
+  p_job_card_id: string;
+  p_part_id: string;
+  p_donor_vehicle_id: string;
+  p_condition?: string;
+  p_notes?: string | null;
+}
+
+export interface CompleteJobCardParams {
+  p_job_card_id: string;
+  p_roadworthiness_confirmed: boolean;
+  p_final_test_notes?: string | null;
+  p_labour_cost?: number;
+}
+
+export interface AdjustStoreInventoryParams {
+  p_store_id: string;
+  p_part_id: string;
+  p_condition: string;
+  p_quantity_change: number;
+  p_transaction_type: string;
+  p_unit_cost?: number;
+  p_notes?: string | null;
+}
+
+export interface TransferStoreInventoryParams {
+  p_source_store_id: string;
+  p_target_store_id: string;
+  p_part_id: string;
+  p_condition: string;
+  p_quantity: number;
+  p_notes?: string | null;
+}
+
 // ── Database shape for supabase-js generics ───────────────────────────────────
 export interface Database {
   public: {
@@ -299,6 +533,16 @@ export interface Database {
       global_config: { Row: GlobalConfig; Insert: Omit<GlobalConfig, 'updated_at'>; Update: Partial<GlobalConfig>; Relationships: [] };
       audit_logs: { Row: AuditLog; Insert: Omit<AuditLog, 'id' | 'timestamp'>; Update: Partial<AuditLog>; Relationships: [] };
       notifications: { Row: AppNotification; Insert: Omit<AppNotification, 'id' | 'created_at'>; Update: Partial<AppNotification>; Relationships: [] };
+      vehicle_makes: { Row: VehicleMake; Insert: Omit<VehicleMake, 'id' | 'created_at'>; Update: Partial<VehicleMake>; Relationships: [] };
+      vehicle_models: { Row: VehicleModel; Insert: Omit<VehicleModel, 'id' | 'created_at'>; Update: Partial<VehicleModel>; Relationships: [] };
+      parts_catalog: { Row: PartCatalog; Insert: Omit<PartCatalog, 'id' | 'created_at' | 'updated_at'>; Update: Partial<PartCatalog>; Relationships: [] };
+      part_model_compatibility: { Row: PartModelCompatibility; Insert: Omit<PartModelCompatibility, 'id'>; Update: Partial<PartModelCompatibility>; Relationships: [] };
+      store_inventory: { Row: StoreInventory; Insert: Omit<StoreInventory, 'id' | 'updated_at'>; Update: Partial<StoreInventory>; Relationships: [] };
+      inventory_transactions: { Row: InventoryTransaction; Insert: Omit<InventoryTransaction, 'id' | 'created_at'>; Update: Partial<InventoryTransaction>; Relationships: [] };
+      job_cards: { Row: JobCard; Insert: Omit<JobCard, 'id' | 'job_card_number' | 'created_at' | 'updated_at' | 'total_cost'>; Update: Partial<JobCard>; Relationships: [] };
+      job_card_parts: { Row: JobCardPart; Insert: Omit<JobCardPart, 'id' | 'installed_at'>; Update: Partial<JobCardPart>; Relationships: [] };
+      vehicle_donor_history: { Row: VehicleDonorHistory; Insert: Omit<VehicleDonorHistory, 'id' | 'harvested_at'>; Update: Partial<VehicleDonorHistory>; Relationships: [] };
+      purchase_requests: { Row: PurchaseRequest; Insert: Omit<PurchaseRequest, 'id' | 'request_number' | 'created_at' | 'updated_at'>; Update: Partial<PurchaseRequest>; Relationships: [] };
     };
     Views: Record<string, never>;
     Functions: {
@@ -308,6 +552,12 @@ export interface Database {
       swap_assets: { Args: SwapAssetsParams; Returns: void };
       current_role: { Args: Record<string, never>; Returns: UserRole };
       current_store_id: { Args: Record<string, never>; Returns: string };
+      create_job_card: { Args: CreateJobCardParams; Returns: Record<string, any> };
+      consume_job_card_part: { Args: ConsumeJobCardPartParams; Returns: Record<string, any> };
+      record_salvaged_part: { Args: RecordSalvagedPartParams; Returns: Record<string, any> };
+      complete_job_card: { Args: CompleteJobCardParams; Returns: Record<string, any> };
+      adjust_store_inventory: { Args: AdjustStoreInventoryParams; Returns: Record<string, any> };
+      transfer_store_inventory: { Args: TransferStoreInventoryParams; Returns: Record<string, any> };
     };
     Enums: {
       vehicle_status: VehicleStatus;
@@ -316,6 +566,12 @@ export interface Database {
       rental_plan: RentalPlan;
       user_role: UserRole;
       log_type: LogType;
+      job_card_status: JobCardStatus;
+      job_card_severity: JobCardSeverity;
+      job_card_priority: JobCardPriority;
+      part_condition: PartCondition;
+      inventory_transaction_type: InventoryTransactionType;
+      purchase_request_status: PurchaseRequestStatus;
     };
     CompositeTypes: Record<string, never>;
   };

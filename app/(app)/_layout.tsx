@@ -71,12 +71,18 @@ function TabItem({ iconActive, iconInactive, label, focused, onPress }: TabItemP
 
 
 
-const TAB_CONFIG: { iconActive: IoniconName; iconInactive: IoniconName; label: string; route: string }[] = [
+const CAPTAIN_TABS: { iconActive: IoniconName; iconInactive: IoniconName; label: string; route: string }[] = [
   { iconActive: 'analytics',     iconInactive: 'analytics-outline',      label: 'Overview', route: 'index'    },
   { iconActive: 'document-text', iconInactive: 'document-text-outline',  label: 'Rentals',  route: 'rentals'  },
   { iconActive: 'car',           iconInactive: 'car-outline',            label: 'Fleet',    route: 'fleet'    },
   { iconActive: 'card',          iconInactive: 'card-outline',           label: 'Payments', route: 'payments' },
   { iconActive: 'people',        iconInactive: 'people-outline',         label: 'Riders',   route: 'riders'   },
+];
+
+const MECHANIC_TABS: { iconActive: IoniconName; iconInactive: IoniconName; label: string; route: string }[] = [
+  { iconActive: 'analytics', iconInactive: 'analytics-outline', label: 'Overview', route: 'index'       },
+  { iconActive: 'construct', iconInactive: 'construct-outline', label: 'Workshop', route: 'maintenance' },
+  { iconActive: 'car',       iconInactive: 'car-outline',       label: 'Fleet',    route: 'fleet'       },
 ];
 
 async function registerForPushNotificationsAsync() {
@@ -125,6 +131,8 @@ export default function AppLayout() {
   const isEodTime = useIsEodTime();
 
   const storeId = selectedStore?.store_id ?? null;
+  const isMechanic = profile?.role === 'MECHANIC';
+  const tabs = isMechanic ? MECHANIC_TABS : CAPTAIN_TABS;
 
   // Bookings Realtime — one channel for the whole app session.
   // Invalidates the bookings cache the instant admin edits anything.
@@ -185,36 +193,34 @@ export default function AppLayout() {
         storeName={selectedStore?.name}
         role={profile?.role}
         onSignOut={handleSignOut}
-        isEodTime={isEodTime}
+        isEodTime={isMechanic ? false : isEodTime}
       />
       <Tabs
         screenOptions={{ headerShown: false }}
-        tabBar={({ state, navigation }) => (
-          <View
-            style={[
-              styles.tabBar,
-              { paddingBottom: Math.max(insets.bottom, 8) },
-            ]}
-          >
-            {TAB_CONFIG.map((tab, i) => (
-              <TabItem
-                key={tab.route}
-                iconActive={tab.iconActive}
-                iconInactive={tab.iconInactive}
-                label={tab.label}
-                focused={state.index === i}
-                onPress={() => {
-                  const event = navigation.emit({
-                    type: 'tabPress',
-                    target: state.routes[i]?.key ?? '',
-                    canPreventDefault: true,
-                  });
-                  if (!event.defaultPrevented) navigation.navigate(tab.route);
-                }}
-              />
-            ))}
-          </View>
-        )}
+        tabBar={({ state, navigation }) => {
+          const currentRoute = state.routes[state.index]?.name;
+          return (
+            <View
+              style={[
+                styles.tabBar,
+                { paddingBottom: Math.max(insets.bottom, 8) },
+              ]}
+            >
+              {tabs.map((tab) => (
+                <TabItem
+                  key={tab.route}
+                  iconActive={tab.iconActive}
+                  iconInactive={tab.iconInactive}
+                  label={tab.label}
+                  focused={currentRoute === tab.route}
+                  onPress={() => {
+                    navigation.navigate(tab.route);
+                  }}
+                />
+              ))}
+            </View>
+          );
+        }}
       >
         <Tabs.Screen name="index"       />
         <Tabs.Screen name="rentals"     />

@@ -10,6 +10,19 @@ import type {
   GlobalConfig,
   RecordPaymentParams,
   SwapAssetsParams,
+  JobCard,
+  JobCardPart,
+  PartCatalog,
+  StoreInventory,
+  InventoryTransaction,
+  PurchaseRequest,
+  VehicleDonorHistory,
+  CreateJobCardParams,
+  ConsumeJobCardPartParams,
+  RecordSalvagedPartParams,
+  CompleteJobCardParams,
+  AdjustStoreInventoryParams,
+  TransferStoreInventoryParams,
 } from '../lib/database.types';
 
 // ── Booking cutoff check ───────────────────────────────────────────────────────
@@ -839,5 +852,176 @@ export async function markAllNotificationsAsRead(storeId: string | null, captain
   const { error } = await query;
   if (error) throw new Error(`Mark all notifications read failed: ${error.message}`);
 }
+
+// ─────────────────────────────────────────────────────────────────────────────
+// MAINTENANCE & INVENTORY SERVICES (v1)
+// ─────────────────────────────────────────────────────────────────────────────
+
+export async function createJobCardService(params: CreateJobCardParams): Promise<{ success: boolean; job_card_id: string; job_card_number: string }> {
+  const { data, error } = await supabase.rpc('create_job_card', params as any);
+  if (error) throw new Error(`Create Job Card failed: ${error.message}`);
+  return data as any;
+}
+
+export async function consumeJobCardPartService(params: ConsumeJobCardPartParams): Promise<{ success: boolean; inventory_transaction_id: string; new_stock_balance: number }> {
+  const { data, error } = await supabase.rpc('consume_job_card_part', params as any);
+  if (error) throw new Error(`Consume Part failed: ${error.message}`);
+  return data as any;
+}
+
+export async function recordSalvagedPartService(params: RecordSalvagedPartParams): Promise<{ success: boolean; donor_plate: string; transaction_id: string }> {
+  const { data, error } = await supabase.rpc('record_salvaged_part', params as any);
+  if (error) throw new Error(`Record Salvaged Part failed: ${error.message}`);
+  return data as any;
+}
+
+export async function completeJobCardService(params: CompleteJobCardParams): Promise<{ success: boolean; vehicle_id: string; status: string }> {
+  const { data, error } = await supabase.rpc('complete_job_card', params as any);
+  if (error) throw new Error(`Complete Job Card failed: ${error.message}`);
+  return data as any;
+}
+
+export async function adjustStoreInventoryService(params: AdjustStoreInventoryParams): Promise<{ success: boolean; balance_after: number; transaction_id: string }> {
+  const { data, error } = await supabase.rpc('adjust_store_inventory', params as any);
+  if (error) throw new Error(`Adjust Inventory failed: ${error.message}`);
+  return data as any;
+}
+
+export async function transferStoreInventoryService(params: TransferStoreInventoryParams): Promise<{ success: boolean; source_balance: number; target_balance: number }> {
+  const { data, error } = await supabase.rpc('transfer_store_inventory', params as any);
+  if (error) throw new Error(`Transfer Inventory failed: ${error.message}`);
+  return data as any;
+}
+
+export async function updateJobCardStatusService(
+  jobCardId: string,
+  status: string,
+  diagnosis?: string | null,
+  repairNotes?: string | null
+): Promise<void> {
+  const updates: Record<string, any> = { status, updated_at: new Date().toISOString() };
+  if (diagnosis !== undefined) updates.diagnosis = diagnosis;
+  if (repairNotes !== undefined) updates.repair_notes = repairNotes;
+
+  const { error } = await supabase
+    .from('job_cards')
+    .update(updates)
+    .eq('id', jobCardId);
+  if (error) throw new Error(`Update Job Card Status failed: ${error.message}`);
+}
+
+export async function createPurchaseRequestService(
+  storeId: string,
+  partId: string,
+  quantity: number,
+  reason: string | null
+): Promise<void> {
+  const user = (await supabase.auth.getUser()).data.user;
+  const { error } = await supabase
+    .from('purchase_requests')
+    .insert({
+      store_id: storeId,
+      part_id: partId,
+      quantity_requested: quantity,
+      reason,
+      requested_by: user?.id ?? null,
+    });
+  if (error) throw new Error(`Create Purchase Request failed: ${error.message}`);
+}
+
+export async function fetchJobCardsService(storeId: string | null, statusFilter?: string): Promise<JobCard[]> {
+  let query = supabase
+    .from('job_cards')
+    .select(`
+      *,
+      vehicle:vehicles(*),
+      parts:job_card_parts(*, part:parts_catalog(*), donor_vehicle:vehicles(*))
+    `)
+    .order('created_at', { ascending: false });
+
+  if (storeId) {
+    query = query.eq('store_id', storeId);
+  }
+  if (statusFilter && statusFilter !== 'ALL') {
+    query = query.eq('status', statusFilter);
+  }
+
+  const { data, error } = await query;
+  if (error) throw new Error(`Fetch Job Cards failed: ${error.message}`);
+  return (data ?? []) as unknown as JobCard[];
+}
+
+export async function fetchJobCardByIdService(jobCardId: string): Promise<JobCard> {
+  const { data, error } = await supabase
+    .from('job_cards')
+    .select(`
+      *,
+      vehicle:vehicles(*),
+      parts:job_card_parts(*, part:parts_catalog(*), donor_vehicle:vehicles(*))
+    `)
+    .eq('id', jobCardId)
+    .single();
+
+  if (error) throw new Error(`Fetch Job Card ${jobCardId} failed: ${error.message}`);
+  return data as unknown as JobCard;
+}
+
+export async function fetchStoreInventoryService(storeId: string): Promise<StoreInventory[]> {
+  const { data, error } = await supabase
+    .from('store_inventory')
+    .select(`
+      *,
+      part:parts_catalog(*)
+    `)
+    .eq('store_id', storeId)
+    .order('updated_at', { ascending: false });
+
+  if (error) throw new Error(`Fetch Store Inventory failed: ${error.message}`);
+  return (data ?? []) as unknown as StoreInventory[];
+}
+
+export async function fetchPartsCatalogService(): Promise<PartCatalog[]> {
+  const { data, error } = await supabase
+    .from('parts_catalog')
+    .select('*')
+    .eq('is_active', true)
+    .order('name', { ascending: true });
+
+  if (error) throw new Error(`Fetch Parts Catalog failed: ${error.message}`);
+  return (data ?? []) as unknown as PartCatalog[];
+}
+
+export async function fetchDonorVehiclesService(storeId: string, currentVehicleId?: string): Promise<any[]> {
+  let query = supabase
+    .from('vehicles')
+    .select('*')
+    .eq('store_id', storeId)
+    .in('status', ['Maintenance', 'Inactive'])
+    .order('plate_number', { ascending: true });
+
+  if (currentVehicleId) {
+    query = query.neq('id', currentVehicleId);
+  }
+
+  const { data, error } = await query;
+  if (error) throw new Error(`Fetch Donor Vehicles failed: ${error.message}`);
+  return data ?? [];
+}
+
+export async function fetchVehicleMaintenanceTimelineService(vehicleId: string): Promise<JobCard[]> {
+  const { data, error } = await supabase
+    .from('job_cards')
+    .select(`
+      *,
+      vehicle:vehicles(*),
+      parts:job_card_parts(*, part:parts_catalog(*), donor_vehicle:vehicles(*))
+    `)
+    .eq('vehicle_id', vehicleId)
+    .order('created_at', { ascending: false });
+
+  if (error) throw new Error(`Fetch Vehicle Maintenance Timeline failed: ${error.message}`);
+  return (data ?? []) as unknown as JobCard[];
+}
+
 
 

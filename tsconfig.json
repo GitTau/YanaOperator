@@ -36,7 +36,8 @@
     ".expo/types/**/*.ts"
   ],
   "exclude": [
-    "app/(app)/performance.tsx"
+    "app/(app)/performance.tsx",
+    "supabase/functions"
   ],
   "extends": "expo/tsconfig.base"
 }
