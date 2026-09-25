@@ -85,6 +85,14 @@ const MECHANIC_TABS: { iconActive: IoniconName; iconInactive: IoniconName; label
   { iconActive: 'car',       iconInactive: 'car-outline',       label: 'Fleet',    route: 'fleet'       },
 ];
 
+const ADMIN_TABS: { iconActive: IoniconName; iconInactive: IoniconName; label: string; route: string }[] = [
+  { iconActive: 'analytics',     iconInactive: 'analytics-outline',      label: 'Overview', route: 'index'       },
+  { iconActive: 'document-text', iconInactive: 'document-text-outline',  label: 'Rentals',  route: 'rentals'     },
+  { iconActive: 'construct',     iconInactive: 'construct-outline',      label: 'Workshop', route: 'maintenance' },
+  { iconActive: 'car',           iconInactive: 'car-outline',            label: 'Fleet',    route: 'fleet'       },
+  { iconActive: 'card',          iconInactive: 'card-outline',           label: 'Payments', route: 'payments'    },
+];
+
 async function registerForPushNotificationsAsync() {
   if (Platform.OS === 'web') return null;
 
@@ -131,8 +139,9 @@ export default function AppLayout() {
   const isEodTime = useIsEodTime();
 
   const storeId = selectedStore?.store_id ?? null;
+  const isAdmin = profile?.role === 'ADMIN';
   const isMechanic = profile?.role === 'MECHANIC';
-  const tabs = isMechanic ? MECHANIC_TABS : CAPTAIN_TABS;
+  const tabs = isMechanic ? MECHANIC_TABS : isAdmin ? ADMIN_TABS : CAPTAIN_TABS;
 
   // Bookings Realtime — one channel for the whole app session.
   // Invalidates the bookings cache the instant admin edits anything.
