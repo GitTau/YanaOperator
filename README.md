@@ -1,53 +1,33 @@
-# YanaOS (Operations App)
+---
+title: "YanaOperator"
+kind: entry-point
+status: navigation
+updated: 2026-10-06
+owner: TauBoss
+tags: [yana-brain, yana/entry-point]
+handover: false
+aliases: []
+---
+# YanaOperator
 
-YanaOS is the core operational application for Yana (Yantron Technology Pvt. Ltd.), an EV 2-wheeler fleet-as-a-service startup. 
+Android ZAP Point operations app, configured version 1.9.0.
 
-**This application is exclusively for internal use by ZAP Point Captains, Supervisors, and Admins.**
+Start with [[Yana Operational Workflow|customer journey]] or [open it](../../Yana%20Operational%20Workflow.md). Maintained source detail is [[YanaOS/docs/apps/Operator Technical Reference|Operator Technical Reference]] / [open reference](../docs/apps/Operator%20Technical%20Reference.md).
 
-## Core Capabilities 🚀
-- **Rider Onboarding:** Full digital KYC, plan selection, and asset allocation. 
-- **Fleet & Asset Management:** Real-time tracking of Vehicles (XERO) and Batteries (EMO/Flowatt).
-- **Payment & Settlements:** Financial dashboard with built-in payment gate logic (preventing dispatch on overdue accounts).
-- **Battery Swaps:** Digital swap registry with low-battery auto-flagging.
-- **Maintenance Lifecycle:** Tracking minor/major repairs, triggering SLA monitors, and Supervisor-only QC checkoffs.
-- **EOD Reporting:** Built-in daily reconciliation for fleet statuses and cash control.
+Use Node 20+ and an Android development build:
 
-## Tech Stack 🛠
-- **Frontend Framework:** React Native with Expo (SDK 55)
-- **Target OS:** Android ONLY (iOS is completely out of scope for development/updates)
-- **Routing:** Expo Router (File-based routing)
-- **State Management:** Zustand (Global State) & TanStack React Query (Server State caching & polling)
-- **Database & Auth:** Supabase (Postgres, Auth v2, Storage, Edge Functions)
-- **UI Design System:** Custom built per internal `DESIGN_OPS.md` guidelines
-
-## Setup & Running Locally 💻
-
-### 1. Prerequisites
-- Node.js (v18+)
-- [Expo Go](https://expo.dev/go) app on your device (Must match the SDK version running locally) OR configure a Development Build via EAS.
-- Access to the Yana Supabase project (`kaoelfcaiegjjhyrrlak`)
-
-### 2. Installation
-```bash
+~~~powershell
 npm install
-```
+npx expo run:android
+npx expo start --dev-client
+~~~
 
-### 3. Environment Variables
-Create a `.env` file in the root directory and add your Supabase credentials. Do not commit actual live keys:
-```env
-EXPO_PUBLIC_SUPABASE_URL=your_supabase_project_url
-EXPO_PUBLIC_SUPABASE_ANON_KEY=your_supabase_anon_key
-```
+Expo Go is not the supported path. Mobile builds/updates target Android.
 
-### 4. Start the Application
-```bash
-npx expo start --clear
-```
+For a recipient without the vault, share [YanaOS Handover](../docs/handover/YanaOS%20Handover.md). The former PROJECT_REFERENCE.md was consolidated; original details are recoverable through the [cleanup record](../docs/archive/README.md).
 
-## Security & Architecture Notes 🔒
-- **RLS (Row Level Security):** Data scoping is enforced entirely at the Supabase database level. Captains only see data tied to their authenticated `auth.jwt() -> zap_point_id`.
-- **Atomic Operations:** All critical path write operations (booking creation, swaps, payments) are executed via Supabase RPC functions (`create_booking`, `swap_assets`, `record_payment`) to guarantee database transaction integrity.
-- **Offline Reliability:** (WIP) Support for offline queuing using Expo SQLite for areas with spotty cellular reception. 
+Policy lives in [[Rental Plan]]; current code gaps live in [[YanaOS/docs/reviews/OS Review 2026-10-06|OS Review]]. This README does not promise that every protection is implemented.
 
-## Ownership
-© 2026 Yantron Technology Pvt. Ltd. All rights reserved.
+## Navigation
+
+[[Yana Operational Workflow|Customer journey and handover]] · [Open journey](../../Yana%20Operational%20Workflow.md) · [[YanaOS/docs/README|All notes]] · [Open index](../docs/README.md)
