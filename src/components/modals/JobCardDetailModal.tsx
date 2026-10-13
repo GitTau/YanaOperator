@@ -3,7 +3,7 @@
 // ─────────────────────────────────────────────────────────────────────────────
 
 import { Ionicons } from '@expo/vector-icons';
-import React, { useState } from 'react';
+import React, { useEffect, useState } from 'react';
 import {
   ActivityIndicator,
   Alert,
@@ -56,13 +56,27 @@ export function JobCardDetailModal({
   onOpenPurchaseRequest,
   onOpenVehicleHistory,
 }: JobCardDetailModalProps) {
-  if (!jobCard) return null;
-
+  // Hooks must run on every render (before any early return), and the form must
+  // start fresh for each job card — otherwise QC ticks / costs leak between cards.
   const [qcConfirmed, setQcConfirmed] = useState(false);
   const [labourCost, setLabourCost] = useState('0');
   const [testNotes, setTestNotes] = useState('');
-  const [diagnosisInput, setDiagnosisInput] = useState(jobCard.diagnosis ?? '');
+  const [diagnosisInput, setDiagnosisInput] = useState(jobCard?.diagnosis ?? '');
   const [isSubmitting, setIsSubmitting] = useState(false);
+
+  const jobCardId = jobCard?.id;
+  const jobCardDiagnosis = jobCard?.diagnosis ?? '';
+  useEffect(() => {
+    setQcConfirmed(false);
+    setLabourCost('0');
+    setTestNotes('');
+    setDiagnosisInput(jobCardDiagnosis);
+    setIsSubmitting(false);
+    // Reset only when a different card is opened (or the modal reopens).
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [jobCardId, visible]);
+
+  if (!jobCard) return null;
 
   const parts = jobCard.parts ?? [];
   const partsTotal = parts.reduce((sum, p) => sum + (p.unit_cost * p.quantity), 0);

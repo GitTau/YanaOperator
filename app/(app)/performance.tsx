@@ -418,7 +418,8 @@ export default function PerformanceScreen() {
   // Task classifications
   const activeTasks = tasks?.filter((t) => t.status === 'pending' && t.date <= today) ?? [];
   const upcomingTasks = tasks?.filter((t) => t.status === 'pending' && t.date > today) ?? [];
-  const completedTasks = tasks?.filter((t) => t.status === 'done' || t.status === 'not_done') ?? [];
+  // Task status is only 'pending' | 'done' (task_entries); 'not_done' never exists.
+  const completedTasks = tasks?.filter((t) => t.status === 'done') ?? [];
 
   const activeTasksCount = activeTasks.length;
   const upcomingTasksCount = upcomingTasks.length;
