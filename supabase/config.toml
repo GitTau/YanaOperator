@@ -1,0 +1,24 @@
+# LOCAL settings for `supabase start` only. Nothing here reaches the live project unless someone
+# deliberately runs `supabase config push`. The live project is set in the Supabase dashboard (see
+# docs/reviews/Rider OTP Handoff.md).
+project_id = "YanaOperator"
+
+[auth.sms]
+enable_signup = true
+enable_confirmations = false
+otp_length = 6          # 6-digit code
+otp_expiry = 600        # 10 minutes
+max_frequency = "60s"   # at most 1 send per minute per phone
+
+[auth.sms.test_otp]
+
+[auth.hook.send_sms]
+enabled = true
+uri = "http://host.docker.internal:54321/functions/v1/send-otp-msg91"
+secrets = "env(SEND_SMS_HOOK_SECRET)"
+
+[auth.rate_limit]
+sms_sent = 30           # per hour, whole project (daily cap is also watched in the dashboard)
+
+[functions.send-otp-msg91]
+verify_jwt = false      # Supabase Auth calls it without a user JWT; the signature is the lock
