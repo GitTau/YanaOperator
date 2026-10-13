@@ -830,14 +830,6 @@ export async function updateCaptainPushToken(captainId: string, token: string): 
   if (error) throw new Error(`Update push token failed: ${error.message}`);
 }
 
-export async function updateStoreCaptainsPushToken(storeId: string, token: string): Promise<void> {
-  const { error } = await supabase
-    .from('captains')
-    .update({ push_token: token })
-    .eq('store_id', storeId);
-  if (error) throw new Error(`Update store captains push token failed: ${error.message}`);
-}
-
 // ── Notifications Mutations ────────────────────────────────────────────────────
 export async function markNotificationAsRead(id: string): Promise<void> {
   const { error } = await supabase
@@ -847,14 +839,18 @@ export async function markNotificationAsRead(id: string): Promise<void> {
   if (error) throw new Error(`Mark notification read failed: ${error.message}`);
 }
 
+// Same scope as useMyNotifications: mine + store-wide notices for my store.
+// With neither id there is nothing safe to mark, so do nothing (was: mark every row).
 export async function markAllNotificationsAsRead(storeId: string | null, captainId: string | null): Promise<void> {
-  let query = supabase.from('notifications').update({ is_read: true }).eq('is_read', false);
-  if (captainId) {
-    query = query.eq('captain_id', captainId);
-  } else if (storeId) {
-    query = query.eq('store_id', storeId);
-  }
-  const { error } = await query;
+  const filters: string[] = [];
+  if (captainId) filters.push(`captain_id.eq.${captainId}`);
+  if (storeId) filters.push(`and(captain_id.is.null,store_id.eq.${storeId})`);
+  if (filters.length === 0) return;
+  const { error } = await supabase
+    .from('notifications')
+    .update({ is_read: true })
+    .eq('is_read', false)
+    .or(filters.join(','));
   if (error) throw new Error(`Mark all notifications read failed: ${error.message}`);
 }
 

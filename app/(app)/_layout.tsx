@@ -31,8 +31,8 @@ import { Colors, Radius, Spacing, Typography } from '../../src/constants/design'
 import { YanaHeader } from '../../src/components/YanaHeader';
 import { useAuthStore } from '../../src/stores/authStore';
 import { useStoreSelectionStore } from '../../src/stores/storeSelectionStore';
-import { useIsEodTime, useCaptainByStore, useBookingsRealtime } from '../../src/hooks/useQueries';
-import { updateCaptainPushToken, updateStoreCaptainsPushToken } from '../../src/services/bookingService';
+import { useIsEodTime, useBookingsRealtime } from '../../src/hooks/useQueries';
+import { updateCaptainPushToken } from '../../src/services/bookingService';
 
 type IoniconName = React.ComponentProps<typeof Ionicons>['name'];
 
@@ -146,21 +146,16 @@ export default function AppLayout() {
   // Bookings Realtime — one channel for the whole app session.
   // Invalidates the bookings cache the instant admin edits anything.
   useBookingsRealtime(storeId);
-  const { data: captain } = useCaptainByStore(storeId);
-  const captainId = captain?.id ?? null;
+  // Push token belongs to this device's signed-in captain only — never to every
+  // captain at the store, or one phone receives everyone's notifications.
+  const captainId = useAuthStore((s) => s.captain?.id ?? null);
 
   useEffect(() => {
     async function setupNotifications() {
       try {
         const token = await registerForPushNotificationsAsync();
-        if (token) {
-          console.log('[PUSH] Push token resolved:', token);
-          if (captainId) {
-            await updateCaptainPushToken(captainId, token);
-          }
-          if (storeId) {
-            await updateStoreCaptainsPushToken(storeId, token);
-          }
+        if (token && captainId) {
+          await updateCaptainPushToken(captainId, token);
         }
       } catch (err) {
         console.warn('Failed to set up notifications:', err);
@@ -176,7 +171,7 @@ export default function AppLayout() {
     });
 
     return () => appStateSub.remove();
-  }, [captainId, storeId]);
+  }, [captainId]);
 
   useEffect(() => {
     const subscription = Notifications.addNotificationResponseReceivedListener((response) => {

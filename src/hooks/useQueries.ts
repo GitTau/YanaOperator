@@ -8,6 +8,7 @@ import React, { useEffect } from 'react';
 import { useQuery, useQueryClient } from '@tanstack/react-query';
 import type { Captain, JobCard, StoreInventory, PartCatalog } from '../lib/database.types';
 import { supabase } from '../lib/supabase';
+import { useAuthStore } from '../stores/authStore';
 import {
   fetchJobCardsService,
   fetchJobCardByIdService,
@@ -18,6 +19,7 @@ import {
 } from '../services/bookingService';
 
 const POLL_INTERVAL = 30_000; // 30 seconds
+const BOOKING_HISTORY_DAYS = 120;
 
 // ── Query Keys ────────────────────────────────────────────────────────────────
 export const queryKeys = {
@@ -142,6 +144,9 @@ export function useBookings(storeId: string | null) {
     // while the app was in the background.
     refetchOnMount: 'always',
     queryFn: async () => {
+      // Polled every 30s, so don't pull the store's whole history each time:
+      // every open or unsettled rental, plus anything created in the last 120 days.
+      const cutoff = new Date(Date.now() - BOOKING_HISTORY_DAYS * 24 * 60 * 60 * 1000).toISOString().slice(0, 10);
       const { data, error } = await supabase
         .from('bookings')
         .select(`
@@ -152,6 +157,7 @@ export function useBookings(storeId: string | null) {
           charger:chargers(*)
         `)
         .eq('store_id', storeId as string)
+        .or(`status.in.(Draft,Active,Paused),is_settled.eq.false,created_at.gte.${cutoff}`)
         .order('created_at', { ascending: false });
       if (error) throw new Error(error.message);
       return data ?? [];
@@ -520,14 +526,20 @@ export function useActiveCycle() {
   });
 }
 
-/** Fetches the captain record for the currently selected store. */
+/**
+ * The captain the app acts as. Staff always act as their own signed-in captain
+ * record; only an Admin browsing a store falls back to that store's active captain.
+ */
 export function useCaptainByStore(storeId: string | null) {
+  const ownCaptain = useAuthStore((s) => s.captain);
+  const isAdmin = useAuthStore((s) => s.profile?.role === 'ADMIN');
   return useQuery<Captain | null>({
-    queryKey: queryKeys.captainByStore(storeId ?? ''),
+    queryKey: [...queryKeys.captainByStore(storeId ?? ''), ownCaptain?.id ?? 'none', isAdmin],
     enabled: !!storeId,
     staleTime: 5 * 60 * 1000,
     queryFn: async () => {
       if (!storeId) return null;
+      if (!isAdmin) return ownCaptain ?? null;
       const { data, error } = await supabase
         .from('captains')
         .select('*')
@@ -608,9 +620,11 @@ export function useMyNotifications(storeId: string | null, captainId: string | n
     enabled: true,
     refetchInterval: POLL_INTERVAL,
     queryFn: async () => {
-      const filters: string[] = ['captain_id.is.null', 'store_id.is.null'];
+      // Mine, store-wide notices for my store, and company-wide broadcasts.
+      // Never other captains' or other stores'.
+      const filters: string[] = ['and(captain_id.is.null,store_id.is.null)'];
       if (captainId) filters.push(`captain_id.eq.${captainId}`);
-      if (storeId) filters.push(`store_id.eq.${storeId}`);
+      if (storeId) filters.push(`and(captain_id.is.null,store_id.eq.${storeId})`);
 
       const { data, error } = await supabase
         .from('notifications')
