@@ -246,9 +246,14 @@ export function calculatePricing(
   securityDeposit: number;
   dispatchLimit: number;
 } {
-  const baseRent = plan === 'Weekly' ? config.weekly_rate : config.monthly_rate;
-  const gstAmount = baseRent * (config.gst_percentage / 100);
-  const subtotal = baseRent + gstAmount;
+  // global_config stores the PRE-GST rate. The rider price is GST-inclusive
+  // (Decision Log D-003) and is rounded to the whole rupee, e.g. 1483.05 × 1.18 → ₹1,750.
+  // Admin edits the inclusive price; the same rule is used in Rider and Admin.
+  const gstRate = config.gst_percentage ?? 0;
+  const rate = plan === 'Weekly' ? config.weekly_rate : config.monthly_rate;
+  const subtotal = Math.round(rate * (1 + gstRate / 100));
+  const gstAmount = Math.round((subtotal - subtotal / (1 + gstRate / 100)) * 100) / 100;
+  const baseRent = Math.round((subtotal - gstAmount) * 100) / 100;
   const securityDeposit = config.security_deposit;
   const dispatchLimit = subtotal + securityDeposit;
 

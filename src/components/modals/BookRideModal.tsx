@@ -449,9 +449,9 @@ export function BookRideModal({
           {pricing && (
             <View style={styles.revenueCard}>
               <Text style={styles.revenueTitle}>💰 REVENUE PROTECTION</Text>
-              <RevenueLine label={`Base Rent (${plan})`} amount={pricing.baseRent} />
-              <RevenueLine label={`GST (${globalConfig?.gst_percentage ?? 18}%)`} amount={pricing.gstAmount} />
-              <RevenueLine label="Subtotal" amount={pricing.subtotal} valueStyle={{ color: Colors.brandCyan }} />
+              <RevenueLine label={`Rent excl. GST (${plan})`} amount={pricing.baseRent} />
+              <RevenueLine label={`GST included (${globalConfig?.gst_percentage ?? 18}%)`} amount={pricing.gstAmount} />
+              <RevenueLine label="Rent (incl. GST)" amount={pricing.subtotal} valueStyle={{ color: Colors.brandCyan }} />
               <View style={styles.revenueDivider} />
               <RevenueLine label="Security Deposit" amount={pricing.securityDeposit} />
               <View style={styles.revenueDivider} />
