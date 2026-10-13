@@ -7,6 +7,8 @@ import type { User } from '@supabase/supabase-js';
 import { create } from 'zustand';
 import type { Captain, Profile } from '../lib/database.types';
 import { supabase } from '../lib/supabase';
+import { clearPrivateQueryCache } from '../lib/queryClient';
+import { createStaffSession } from './staffSession';
 
 interface AuthState {
   user: User | null;
@@ -25,39 +27,27 @@ interface AuthState {
 }
 
 async function fetchUserDetails(userId: string): Promise<{ profile: Profile | null; captain: Captain | null }> {
-  try {
-    const { data: profile } = await supabase
-      .from('profiles')
-      .select('*')
-      .eq('id', userId)
-      .maybeSingle();
-
-    let captain: Captain | null = null;
-
-    if (profile?.captain_id) {
-      const { data } = await supabase
-        .from('captains')
-        .select('*')
-        .eq('id', profile.captain_id)
-        .maybeSingle();
-      captain = (data as Captain) ?? null;
-    } else {
-      const { data } = await supabase
-        .from('captains')
-        .select('*')
-        .eq('auth_user_id', userId)
-        .maybeSingle();
-      captain = (data as Captain) ?? null;
+    const { data: profile, error: profileError } = await supabase
+      .from('profiles').select('*').eq('id', userId).maybeSingle();
+    if (profileError) throw new Error('Staff profile lookup failed');
+    if (!profile || profile.id !== userId || !['ADMIN', 'OPERATOR', 'MECHANIC'].includes(profile.role)) {
+      return { profile: null, captain: null };
     }
-
-    return { profile: (profile as Profile) ?? null, captain };
-  } catch (err) {
-    console.error('[AuthStore] fetchUserDetails error:', err);
-    return { profile: null, captain: null };
-  }
+    const query = supabase.from('captains').select('*');
+    const { data, error } = profile.captain_id
+      ? await query.eq('id', profile.captain_id).maybeSingle()
+      : await query.eq('auth_user_id', userId).maybeSingle();
+    if (error) throw new Error('Staff identity lookup failed');
+    return { profile: profile as Profile, captain: (data as Captain) ?? null };
 }
 
-export const useAuthStore = create<AuthState>((set, get) => ({
+let authSubscription: { unsubscribe: () => void } | undefined;
+let authEventGeneration = 0;
+export const useAuthStore = create<AuthState>((set, get) => {
+const staffSession = createStaffSession<User, Profile, Captain>({
+  load: fetchUserDetails, publish: (state) => set(state), clearCache: clearPrivateQueryCache,
+});
+return ({
   user: null,
   profile: null,
   captain: null,
@@ -67,40 +57,40 @@ export const useAuthStore = create<AuthState>((set, get) => ({
 
   initialize: async () => {
     set({ isLoading: true, error: null });
+    // Keep Supabase callbacks synchronous: async API calls inside its auth lock
+    // can deadlock. Defer profile work and invalidate earlier account responses.
+    authSubscription?.unsubscribe();
+    authSubscription = supabase.auth.onAuthStateChange((event, session) => {
+      const eventGeneration = ++authEventGeneration;
+      if (event === 'SIGNED_OUT' || !session) { staffSession.reset(); return; }
+      if (event === 'SIGNED_IN' || event === 'TOKEN_REFRESHED' || event === 'USER_UPDATED') {
+        const current = get();
+        const sameUser = current.isAuthenticated && current.user?.id === session.user.id;
+        // Token refresh / repeat SIGNED_IN for the signed-in staff member: nothing changed.
+        if (sameUser && event !== 'USER_UPDATED') return;
+        if (!sameUser) staffSession.reset();
+        setTimeout(() => {
+          void supabase.auth.getSession().then(async ({ data, error }) => {
+            if (eventGeneration !== authEventGeneration) return;
+            if (error) staffSession.reset('Unable to verify the refreshed session. Please sign in again.');
+            else if (data.session?.user.id === session.user.id) {
+              if (sameUser) await staffSession.refresh(data.session.user);
+              else await staffSession.accept(data.session.user);
+            }
+          }).catch(() => {
+            if (eventGeneration === authEventGeneration && !sameUser) staffSession.reset('Unable to refresh staff access. Please retry.');
+          });
+        }, 0);
+      }
+    }).data.subscription;
     try {
-      const { data: { session } } = await supabase.auth.getSession();
-      if (session?.user) {
-        const { profile, captain } = await fetchUserDetails(session.user.id);
-
-        set({
-          user: session.user,
-          profile,
-          captain,
-          isAuthenticated: true,
-        });
-      }
-    } catch (err) {
-      console.error('[AuthStore] initialize failed:', err);
-    } finally {
-      set({ isLoading: false });
-    }
-
-    // Subscribe to auth state changes (token refresh, sign-out, etc.)
-    supabase.auth.onAuthStateChange(async (event, session) => {
-      if (event === 'SIGNED_OUT' || !session) {
-        set({ user: null, profile: null, captain: null, isAuthenticated: false });
-        return;
-      }
-      if (event === 'SIGNED_IN' || event === 'TOKEN_REFRESHED') {
-        const { profile, captain } = await fetchUserDetails(session.user.id);
-        set({
-          user: session.user,
-          profile,
-          captain,
-          isAuthenticated: true,
-        });
-      }
-    });
+      const { data: { session }, error } = await supabase.auth.getSession();
+      if (error) throw error;
+      if (session?.user) await staffSession.accept(session.user);
+      else staffSession.reset();
+    } catch {
+      staffSession.reset('Unable to restore your staff session. Please sign in again.');
+    } finally { set({ isLoading: false }); }
   },
 
   signIn: async (identifier: string, password: string) => {
@@ -114,15 +104,7 @@ export const useAuthStore = create<AuthState>((set, get) => ({
       if (error) throw error;
       if (!data.user) throw new Error('No user returned from sign-in');
 
-      const { profile, captain } = await fetchUserDetails(data.user.id);
-
-      set({
-        user: data.user,
-        profile,
-        captain,
-        isAuthenticated: true,
-        error: null,
-      });
+      await staffSession.accept(data.user);
     } catch (err) {
       const message = err instanceof Error ? err.message : 'Sign in failed';
       set({ error: message });
@@ -134,22 +116,22 @@ export const useAuthStore = create<AuthState>((set, get) => ({
   refreshProfile: async () => {
     const user = get().user;
     if (!user) return;
-    const { profile, captain } = await fetchUserDetails(user.id);
-    set({ profile, captain });
+    await staffSession.refresh(user);
   },
 
   signOut: async () => {
     set({ isLoading: true });
+    authEventGeneration++;
+    staffSession.reset();
     try {
-      await supabase.auth.signOut();
-      set({ user: null, profile: null, captain: null, isAuthenticated: false });
-    } catch (err) {
-      console.error('[AuthStore] signOut failed:', err);
-    } finally {
-      set({ isLoading: false });
-    }
+      const { error } = await supabase.auth.signOut({ scope: 'local' });
+      if (error) throw error;
+    } catch {
+      set({ error: 'Local access was cleared, but session sign-out failed. Please retry.' });
+    } finally { set({ isLoading: false }); }
   },
 
   clearError: () => set({ error: null }),
-}));
+});
+});
 

@@ -1,4 +1,5 @@
-import { QueryClient, QueryClientProvider } from '@tanstack/react-query';
+import { QueryClientProvider } from '@tanstack/react-query';
+import { queryClient } from '../src/lib/queryClient';
 import { Stack, router } from 'expo-router';
 import * as SplashScreen from 'expo-splash-screen';
 import React, { useEffect } from 'react';
@@ -15,15 +16,6 @@ import { useAuthStore } from '../src/stores/authStore';
 import { useStoreSelectionStore } from '../src/stores/storeSelectionStore';
 
 SplashScreen.preventAutoHideAsync();
-
-const queryClient = new QueryClient({
-  defaultOptions: {
-    queries: {
-      retry: 2,
-      staleTime: 30_000,
-    },
-  },
-});
 
 export default function RootLayout() {
   const { initialize, isAuthenticated, isLoading: authLoading } = useAuthStore();
