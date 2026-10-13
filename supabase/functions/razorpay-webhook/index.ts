@@ -51,11 +51,11 @@ serve(async (req) => {
     const webhookSecret = Deno.env.get("RAZORPAY_WEBHOOK_SECRET");
     const rawBody = await req.text();
 
-    if (webhookSecret && signature) {
-      const isValid = await verifyWebhookSignature(rawBody, signature, webhookSecret);
-      if (!isValid) {
-        return new Response("Invalid signature", { status: 401 });
-      }
+    if (!webhookSecret) {
+      throw new Error("Razorpay webhook secret is not configured");
+    }
+    if (!signature || !await verifyWebhookSignature(rawBody, signature, webhookSecret)) {
+      return new Response("Invalid signature", { status: 401 });
     }
 
     const payload = JSON.parse(rawBody);
@@ -68,14 +68,31 @@ serve(async (req) => {
         const paymentId = paymentEntity.id;
         const orderId = paymentEntity.order_id;
         const amount = paymentEntity.amount / 100; // paise to rupees
-        const bookingId = paymentEntity.notes?.booking_id;
+        const keyId = Deno.env.get("RAZORPAY_KEY_ID");
+        const keySecret = Deno.env.get("RAZORPAY_KEY_SECRET");
+        if (!keyId || !keySecret || !orderId || paymentEntity.status !== "captured") {
+          throw new Error("Captured payment or Razorpay configuration missing");
+        }
+        const orderResponse = await fetch(
+          `https://api.razorpay.com/v1/orders/${encodeURIComponent(orderId)}`,
+          { headers: { Authorization: `Basic ${btoa(`${keyId}:${keySecret}`)}` } }
+        );
+        if (!orderResponse.ok) throw new Error("Could not confirm Razorpay order");
+        const order = await orderResponse.json() as {
+          amount?: number; currency?: string; status?: string; notes?: { booking_id?: string };
+        };
+        if (order.status !== "paid" || order.currency !== "INR" || order.amount !== paymentEntity.amount) {
+          throw new Error("Razorpay order does not match captured payment");
+        }
+        const bookingId = order.notes?.booking_id;
 
         if (bookingId) {
           const supabaseUrl = Deno.env.get("SUPABASE_URL") || "https://kaoelfcaiegjjhyrrlak.supabase.co";
           const supabaseServiceKey = Deno.env.get("SUPABASE_SERVICE_ROLE_KEY") || "";
+          if (!supabaseServiceKey) throw new Error("Supabase service key is not configured");
           const supabase = createClient(supabaseUrl, supabaseServiceKey);
 
-          await supabase.rpc("record_razorpay_payment", {
+          const { error } = await supabase.rpc("record_razorpay_payment", {
             p_booking_id: bookingId,
             p_amount: amount,
             p_razorpay_order_id: orderId || null,
@@ -83,6 +100,9 @@ serve(async (req) => {
             p_razorpay_signature: "WEBHOOK_VERIFIED",
             p_user_id: null
           });
+          if (error) throw error;
+        } else {
+          throw new Error("Razorpay order is missing booking ID");
         }
       }
     }
@@ -91,8 +111,8 @@ serve(async (req) => {
       status: 200,
       headers: { "Content-Type": "application/json" }
     });
-  } catch (err: any) {
+  } catch (err: unknown) {
     console.error("Webhook processing error:", err);
-    return new Response(JSON.stringify({ error: err.message }), { status: 500 });
+    return new Response(JSON.stringify({ error: err instanceof Error ? err.message : "Webhook failed" }), { status: 500 });
   }
 });

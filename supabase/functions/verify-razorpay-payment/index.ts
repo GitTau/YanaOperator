@@ -62,36 +62,66 @@ serve(async (req) => {
       user_id
     } = await req.json();
 
-    if (!booking_id || !amount || !razorpay_payment_id) {
+    if (!booking_id || !Number.isFinite(Number(amount)) || Number(amount) <= 0 ||
+        !razorpay_order_id || !razorpay_payment_id || !razorpay_signature) {
       return new Response(
         JSON.stringify({ error: "Missing required verification fields." }),
         { status: 400, headers: { ...corsHeaders, "Content-Type": "application/json" } }
       );
     }
 
+    const keyId = Deno.env.get("RAZORPAY_KEY_ID");
     const keySecret = Deno.env.get("RAZORPAY_KEY_SECRET");
+    const supabaseServiceKey = Deno.env.get("SUPABASE_SERVICE_ROLE_KEY");
+    if (!keyId || !keySecret || !supabaseServiceKey) {
+      throw new Error("Payment verification is not configured");
+    }
 
-    // If Razorpay secret is set and this is a live/non-mock order, strictly verify signature
-    if (keySecret && razorpay_order_id && razorpay_signature && !razorpay_order_id.startsWith("order_test_")) {
-      const isValid = await verifyHmacSignature(
-        razorpay_order_id,
-        razorpay_payment_id,
-        razorpay_signature,
-        keySecret
+    const isValid = await verifyHmacSignature(
+      razorpay_order_id, razorpay_payment_id, razorpay_signature, keySecret
+    );
+    if (!isValid) {
+      return new Response(
+        JSON.stringify({ error: "Invalid payment signature. Verification failed." }),
+        { status: 403, headers: { ...corsHeaders, "Content-Type": "application/json" } }
       );
+    }
 
-      if (!isValid) {
-        return new Response(
-          JSON.stringify({ error: "Invalid payment signature. Verification failed." }),
-          { status: 403, headers: { ...corsHeaders, "Content-Type": "application/json" } }
-        );
-      }
+    // The checkout callback is client-controlled. Confirm the captured payment,
+    // amount and booking against Razorpay before crediting the ledger.
+    const authorization = `Basic ${btoa(`${keyId}:${keySecret}`)}`;
+    const [paymentResponse, orderResponse] = await Promise.all([
+      fetch(`https://api.razorpay.com/v1/payments/${encodeURIComponent(razorpay_payment_id)}`, {
+        headers: { Authorization: authorization },
+      }),
+      fetch(`https://api.razorpay.com/v1/orders/${encodeURIComponent(razorpay_order_id)}`, {
+        headers: { Authorization: authorization },
+      }),
+    ]);
+    if (!paymentResponse.ok || !orderResponse.ok) {
+      throw new Error("Could not confirm payment with Razorpay");
+    }
+    const payment = await paymentResponse.json() as {
+      id?: string; order_id?: string; amount?: number; currency?: string; status?: string;
+    };
+    const order = await orderResponse.json() as {
+      id?: string; amount?: number; currency?: string; status?: string;
+      notes?: { booking_id?: string };
+    };
+    const amountInPaise = Math.round(Number(amount) * 100);
+    if (payment.id !== razorpay_payment_id || payment.order_id !== razorpay_order_id ||
+        payment.status !== "captured" || payment.currency !== "INR" ||
+        payment.amount !== amountInPaise || order.id !== razorpay_order_id ||
+        order.status !== "paid" || order.currency !== "INR" ||
+        order.amount !== amountInPaise || order.notes?.booking_id !== booking_id) {
+      return new Response(
+        JSON.stringify({ error: "Payment details do not match the booking." }),
+        { status: 409, headers: { ...corsHeaders, "Content-Type": "application/json" } }
+      );
     }
 
     // Initialize Supabase admin client
     const supabaseUrl = Deno.env.get("SUPABASE_URL") || "https://kaoelfcaiegjjhyrrlak.supabase.co";
-    const supabaseServiceKey = Deno.env.get("SUPABASE_SERVICE_ROLE_KEY") || Deno.env.get("SUPABASE_ANON_KEY") || "";
-
     const supabase = createClient(supabaseUrl, supabaseServiceKey);
 
     // Call atomic record_razorpay_payment RPC
@@ -117,9 +147,9 @@ serve(async (req) => {
       }),
       { status: 200, headers: { ...corsHeaders, "Content-Type": "application/json" } }
     );
-  } catch (error: any) {
+  } catch (error: unknown) {
     return new Response(
-      JSON.stringify({ error: error.message || "Payment verification failed" }),
+      JSON.stringify({ error: error instanceof Error ? error.message : "Payment verification failed" }),
       { status: 500, headers: { ...corsHeaders, "Content-Type": "application/json" } }
     );
   }
