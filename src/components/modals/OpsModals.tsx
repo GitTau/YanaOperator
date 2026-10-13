@@ -225,6 +225,14 @@ export function ReturnModal({ visible, booking, onClose, onSuccess, damageFines 
                   </Text>
                 </View>
               )}
+              {depositReturnable > 0 && (
+                // The app does not record deposit refunds yet (OS Review #11).
+                <View style={[styles.warningBox, { borderLeftColor: Colors.statusOverdue, marginTop: Spacing.sm }]}>
+                  <Text style={[styles.warningText, { color: Colors.statusOverdue }]}>
+                    Estimate only — this refund is not recorded by the app. Pay and log it as instructed by Admin.
+                  </Text>
+                </View>
+              )}
             </>
           )}
 

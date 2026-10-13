@@ -532,7 +532,7 @@ export default function EodReportScreen() {
             <div class="fin-card highlight">
               <div class="fin-label">Total Collections Today</div>
               <div class="fin-value" style="color: #0891b2;">Rs.${kpis.totalRevenueCollectedToday.toLocaleString('en-IN')}</div>
-              <div class="fin-sub">All gross intake (cash + UPI)</div>
+              <div class="fin-sub">Cash + UPI received, incl. refundable deposits. Not revenue.</div>
             </div>
             <div class="fin-card">
               <div class="fin-label">Cash Received (Drawer)</div>
@@ -626,7 +626,7 @@ export default function EodReportScreen() {
 
   const KPI_CONFIG: KpiProps[] = [
     { label: 'Active Rentals',    value: kpis.totalActiveRentals,                           icon: 'radio-button-on-outline',      color: Colors.brandTeal,       bg: Colors.surfaceTeal   },
-    { label: 'Revenue Collected', value: fmtCurrency(kpis.totalRevenueCollectedToday),      icon: 'cash-outline',                 color: Colors.statusActive,    bg: Colors.surfaceGreen  },
+    { label: 'Collected (incl. deposits)', value: fmtCurrency(kpis.totalRevenueCollectedToday),      icon: 'cash-outline',                 color: Colors.statusActive,    bg: Colors.surfaceGreen  },
     { label: 'Cash Received',     value: fmtCurrency(kpis.totalCashReceivedToday),          icon: 'wallet-outline',               color: Colors.statusWarning,   bg: Colors.surfaceAmber  },
     { label: 'Online (UPI)',      value: fmtCurrency(kpis.totalOnlineReceivedToday),        icon: 'card-outline',                 color: Colors.brandTeal,       bg: Colors.surfaceTeal   },
     { label: 'New Bookings',      value: kpis.totalNewBookingsToday,                        icon: 'add-circle-outline',           color: Colors.statusInfo,      bg: Colors.surfaceBlue   },
