@@ -516,63 +516,6 @@ export interface TransferStoreInventoryParams {
 }
 
 // ── Database shape for supabase-js generics ───────────────────────────────────
-export interface Database {
-  public: {
-    Tables: {
-      stores: { Row: Store; Insert: Omit<Store, 'store_id' | 'created_at'>; Update: Partial<Store>; Relationships: [] };
-      profiles: { Row: Profile; Insert: Omit<Profile, 'created_at'>; Update: Partial<Profile>; Relationships: [] };
-      captains: { Row: Captain; Insert: Partial<Captain>; Update: Partial<Captain>; Relationships: [] };
-      vehicles: { Row: Vehicle; Insert: Omit<Vehicle, 'id' | 'created_at'>; Update: Partial<Vehicle>; Relationships: [] };
-      batteries: { Row: Battery; Insert: Omit<Battery, 'id' | 'created_at'>; Update: Partial<Battery>; Relationships: [] };
-      chargers: { Row: Charger; Insert: Omit<Charger, 'id' | 'created_at'>; Update: Partial<Charger>; Relationships: [] };
-      customers: { Row: Customer; Insert: Omit<Customer, 'id' | 'created_at'>; Update: Partial<Customer>; Relationships: [] };
-      bookings: { Row: Booking; Insert: Omit<Booking, 'id' | 'created_at'>; Update: Partial<Booking>; Relationships: [] };
-      maintenance_jobs: { Row: MaintenanceJob; Insert: Omit<MaintenanceJob, 'id' | 'created_at'>; Update: Partial<MaintenanceJob>; Relationships: [] };
-      parts_inventory: { Row: PartsInventory; Insert: Omit<PartsInventory, 'id' | 'created_at'>; Update: Partial<PartsInventory>; Relationships: [] };
-      vehicle_checklists: { Row: VehicleChecklist; Insert: Omit<VehicleChecklist, 'id' | 'submitted_at'>; Update: Partial<VehicleChecklist>; Relationships: [] };
-      global_config: { Row: GlobalConfig; Insert: Omit<GlobalConfig, 'updated_at'>; Update: Partial<GlobalConfig>; Relationships: [] };
-      audit_logs: { Row: AuditLog; Insert: Omit<AuditLog, 'id' | 'timestamp'>; Update: Partial<AuditLog>; Relationships: [] };
-      notifications: { Row: AppNotification; Insert: Omit<AppNotification, 'id' | 'created_at'>; Update: Partial<AppNotification>; Relationships: [] };
-      vehicle_makes: { Row: VehicleMake; Insert: Omit<VehicleMake, 'id' | 'created_at'>; Update: Partial<VehicleMake>; Relationships: [] };
-      vehicle_models: { Row: VehicleModel; Insert: Omit<VehicleModel, 'id' | 'created_at'>; Update: Partial<VehicleModel>; Relationships: [] };
-      parts_catalog: { Row: PartCatalog; Insert: Omit<PartCatalog, 'id' | 'created_at' | 'updated_at'>; Update: Partial<PartCatalog>; Relationships: [] };
-      part_model_compatibility: { Row: PartModelCompatibility; Insert: Omit<PartModelCompatibility, 'id'>; Update: Partial<PartModelCompatibility>; Relationships: [] };
-      store_inventory: { Row: StoreInventory; Insert: Omit<StoreInventory, 'id' | 'updated_at'>; Update: Partial<StoreInventory>; Relationships: [] };
-      inventory_transactions: { Row: InventoryTransaction; Insert: Omit<InventoryTransaction, 'id' | 'created_at'>; Update: Partial<InventoryTransaction>; Relationships: [] };
-      job_cards: { Row: JobCard; Insert: Omit<JobCard, 'id' | 'job_card_number' | 'created_at' | 'updated_at' | 'total_cost'>; Update: Partial<JobCard>; Relationships: [] };
-      job_card_parts: { Row: JobCardPart; Insert: Omit<JobCardPart, 'id' | 'installed_at'>; Update: Partial<JobCardPart>; Relationships: [] };
-      vehicle_donor_history: { Row: VehicleDonorHistory; Insert: Omit<VehicleDonorHistory, 'id' | 'harvested_at'>; Update: Partial<VehicleDonorHistory>; Relationships: [] };
-      purchase_requests: { Row: PurchaseRequest; Insert: Omit<PurchaseRequest, 'id' | 'request_number' | 'created_at' | 'updated_at'>; Update: Partial<PurchaseRequest>; Relationships: [] };
-    };
-    Views: Record<string, never>;
-    Functions: {
-      create_booking: { Args: CreateBookingParams; Returns: string };
-      dispatch_booking: { Args: DispatchBookingParams; Returns: void };
-      record_payment: { Args: RecordPaymentParams; Returns: void };
-      swap_assets: { Args: SwapAssetsParams; Returns: void };
-      current_role: { Args: Record<string, never>; Returns: UserRole };
-      current_store_id: { Args: Record<string, never>; Returns: string };
-      create_job_card: { Args: CreateJobCardParams; Returns: Record<string, any> };
-      consume_job_card_part: { Args: ConsumeJobCardPartParams; Returns: Record<string, any> };
-      record_salvaged_part: { Args: RecordSalvagedPartParams; Returns: Record<string, any> };
-      complete_job_card: { Args: CompleteJobCardParams; Returns: Record<string, any> };
-      adjust_store_inventory: { Args: AdjustStoreInventoryParams; Returns: Record<string, any> };
-      transfer_store_inventory: { Args: TransferStoreInventoryParams; Returns: Record<string, any> };
-    };
-    Enums: {
-      vehicle_status: VehicleStatus;
-      battery_status: BatteryStatus;
-      booking_status: BookingStatus;
-      rental_plan: RentalPlan;
-      user_role: UserRole;
-      log_type: LogType;
-      job_card_status: JobCardStatus;
-      job_card_severity: JobCardSeverity;
-      job_card_priority: JobCardPriority;
-      part_condition: PartCondition;
-      inventory_transaction_type: InventoryTransactionType;
-      purchase_request_status: PurchaseRequestStatus;
-    };
-    CompositeTypes: Record<string, never>;
-  };
-}
+// Generated from the live schema (see ./database.generated.ts). The hand-written copy that
+// used to live here had drifted from the database and was never passed to createClient.
+export type { Database, Json } from './database.generated';

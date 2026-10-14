@@ -269,9 +269,10 @@ export async function createBooking(
   const { data, error } = await supabase.rpc('create_booking', {
     ...rpcParams,
     p_status: 'Draft',
-    p_start_date: start_date || null,
-    p_end_date: end_date || null,
-    p_charger_id: charger_id || null,
+    // Omit (undefined) rather than null: the generated RPC types model defaulted args as optional.
+    p_start_date: start_date || undefined,
+    p_end_date: end_date || undefined,
+    p_charger_id: charger_id || undefined,
   });
 
   if (error) throw new Error(`Create booking failed: ${error.message}`);
@@ -637,8 +638,8 @@ export async function dispatchBooking(
     p_booking_id: bookingId,
     p_vehicle_id: vehicleId,
     p_battery_id: batteryId,
-    p_charger_id: chargerId || null,
-    p_operator_id: operatorId || null,
+    p_charger_id: chargerId || undefined,
+    p_operator_id: operatorId || undefined,
   });
 
   if (error) throw new Error(`Dispatch failed: ${error.message}`);
