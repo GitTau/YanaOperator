@@ -239,6 +239,11 @@ export default function AppLayout() {
         <Tabs.Screen name="swap-requests" options={{ href: null }} />
         {/* notifications — hidden from tab bar, accessed via hamburger menu & bell icon */}
         <Tabs.Screen name="notifications" options={{ href: null }} />
+        {/* rental-desk — hidden from tab bar, accessed via hamburger menu (rental engine v1) */}
+        <Tabs.Screen name="rental-desk" options={{ href: null }} />
+        {/* kyc-review, rider-match — hidden from tab bar, hamburger menu (Captain identity checks) */}
+        <Tabs.Screen name="kyc-review" options={{ href: null }} />
+        <Tabs.Screen name="rider-match" options={{ href: null }} />
         {/* eod — hidden from tab bar, accessed via Operator button in header */}
         <Tabs.Screen name="eod"         options={{ href: null }} />
       </Tabs>

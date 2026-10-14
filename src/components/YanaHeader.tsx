@@ -42,6 +42,9 @@ const MENU_ITEMS: MenuItemDef[] = [
   { id: 'profile',       label: 'My Profile',    icon: 'person-circle-outline',   route: '/(app)/profile' },
   { id: 'notifications', label: 'Notifications', icon: 'notifications-outline', route: '/(app)/notifications' },
   { id: 'swaprequests',  label: 'Swap Requests', icon: 'swap-horizontal-outline', route: '/(app)/swap-requests' },
+  { id: 'rentaldesk',    label: 'Rental Desk',   icon: 'receipt-outline',         route: '/(app)/rental-desk' },
+  { id: 'kycreview',     label: 'KYC Review',    icon: 'id-card-outline',         route: '/(app)/kyc-review' },
+  { id: 'ridermatch',    label: 'Rider Match',   icon: 'people-outline',          route: '/(app)/rider-match' },
   { id: 'maintenance',   label: 'Maintenance',   icon: 'construct-outline',       route: '/(app)/maintenance' },
   { id: 'performance',   label: 'Performance',   icon: 'bar-chart-outline',       route: '/(app)/performance?segment=performance' },
   { id: 'tasks',         label: 'Tasks',         icon: 'checkbox-outline',        route: '/(app)/performance?segment=tasks' },
@@ -102,8 +105,8 @@ export function YanaHeader({ storeName, role, onSignOut, isEodTime = false }: Ya
 
   const isMechanic = role === 'MECHANIC';
   const menuItems = MENU_ITEMS.filter(item => {
-    if (isMechanic && item.id === 'swaprequests') return false; // Captains approve swaps
-    if (isMechanic && (item.id === 'performance' || item.id === 'tasks')) return false;
+    if (isMechanic && (item.id === 'swaprequests' || item.id === 'kycreview' || item.id === 'ridermatch')) return false; // Captains approve swaps and check riders
+    if (isMechanic && (item.id === 'performance' || item.id === 'tasks' || item.id === 'rentaldesk')) return false;
     return true;
   });
 

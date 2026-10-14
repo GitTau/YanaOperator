@@ -11,6 +11,7 @@ import { ErrorBanner, KPICard, SkeletonCard } from '../../src/components/ui';
 import { useBatteries, useVehicles, queryKeys } from '../../src/hooks/useQueries';
 import { useStoreSelectionStore } from '../../src/stores/storeSelectionStore';
 import type { Battery, Vehicle } from '../../src/lib/database.types';
+import { RentalDeskStrip } from '../../src/components/rental/RentalDeskStrip';
 
 type FleetFilter = 'all' | 'available' | 'active' | 'maintenance';
 
@@ -142,6 +143,9 @@ export default function FleetScreen() {
                 />
               </View>
             </View>
+
+            {/* Rental engine: paused scooters to inspect, scooters in recovery */}
+            <RentalDeskStrip storeId={storeId} context="fleet" />
 
 
             <View style={styles.filterRow}>

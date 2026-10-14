@@ -95,9 +95,10 @@ export function getEffectiveEndDateStr(
 
 
 // ── Overdue Fines Calculation ───────────────────────────────────────────────
-// Standard: Grace period 1 day. Fines accumulate starting day 2 (₹300/day).
-// Monthly 2nd part: due date T+9 days. Grace period T+10 and T+11.
-// Fines accumulate starting day 12 (T+11 or later, days late >= 2) (₹300/day).
+// Standard: day 1 after the end date is fine-free. The FIRST fine is ₹300 on day 2, then another ₹300 for each
+// following day (D-004 / D-020): fine = (daysLate - 1) x 300. (Until 2026-10-15 this charged daysLate x 300,
+// i.e. ₹600 on the first fine day; the database function record_payment still does, for not-enrolled rentals.)
+// Monthly 2nd part: due date T+9 days; the same rule counts from there.
 export function calculateOverdueFines(
   rentalPlan: 'Weekly' | 'Monthly',
   startDateStr: string | null | undefined,
@@ -140,7 +141,7 @@ export function calculateOverdueFines(
     const diffTime = today.getTime() - endDate.getTime();
     const daysLate = Math.floor(diffTime / (1000 * 60 * 60 * 24));
     if (daysLate >= 2) {
-      overdueFine = daysLate * 300;
+      overdueFine = (daysLate - 1) * 300;
     }
   }
 
@@ -160,7 +161,7 @@ export function calculateOverdueFines(
         const diffTime = today.getTime() - secondPartDueDate.getTime();
         const daysLate2ndPart = Math.floor(diffTime / (1000 * 60 * 60 * 24));
         if (daysLate2ndPart >= 2) {
-          const secondPartFine = daysLate2ndPart * 300;
+          const secondPartFine = (daysLate2ndPart - 1) * 300;
           overdueFine = Math.max(overdueFine, secondPartFine);
         }
       }

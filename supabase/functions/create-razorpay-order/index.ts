@@ -2,11 +2,14 @@
 // Supabase Edge Function: create-razorpay-order
 // Purpose: Securely creates an order in Razorpay for Rider dues/deposit payment.
 // The caller must be the signed-in rider (or staff) for this booking, and the
-// amount may not exceed what the booking still owes (booking_amount_due RPC).
+// amount may not exceed what the booking still owes. One dues authority per rental (P-1):
+//   - rental enrolled in the rental engine  -> the engine's statement (engineAmountDuePaise)
+//   - legacy rental                         -> booking_amount_due RPC (stored columns)
 // ─────────────────────────────────────────────────────────────────────────────
 
 import { serve } from "https://deno.land/std@0.168.0/http/server.ts";
 import { createClient } from "https://esm.sh/@supabase/supabase-js@2.39.8";
+import { engineAmountDuePaise } from "../_shared/rental-data.ts";
 
 const corsHeaders = {
   "Access-Control-Allow-Origin": "*",
@@ -48,22 +51,32 @@ serve(async (req) => {
       global: { headers: { Authorization: authorization } },
       auth: { persistSession: false },
     });
+    const amountInPaise = Math.round(Number(amount) * 100);
     const { data: due, error: dueError } = await asCaller.rpc("booking_amount_due", { p_booking_id: booking_id });
-    if (dueError) throw new Error("Could not check the amount due");
-    if (due === null) {
-      return new Response(
-        JSON.stringify({ error: "Booking not found." }),
-        { status: 404, headers: { ...corsHeaders, "Content-Type": "application/json" } }
-      );
+    let duePaise: number;
+    if (dueError && dueError.code === "P0001" && String(dueError.message).includes("ENGINE_MANAGED")) {
+      // The database only raises this for a booking the caller may see, so access is already proven.
+      const serviceKey = Deno.env.get("SUPABASE_SERVICE_ROLE_KEY");
+      if (!serviceKey) throw new Error("Payments are not configured");
+      const service = createClient(supabaseUrl, serviceKey, { auth: { persistSession: false } });
+      duePaise = await engineAmountDuePaise(service, booking_id);
+    } else {
+      if (dueError) throw new Error("Could not check the amount due");
+      if (due === null) {
+        return new Response(
+          JSON.stringify({ error: "Booking not found." }),
+          { status: 404, headers: { ...corsHeaders, "Content-Type": "application/json" } }
+        );
+      }
+      duePaise = Math.round(Number(due) * 100);
     }
-    if (Math.round(Number(amount) * 100) > Math.round(Number(due) * 100)) {
+    if (amountInPaise > duePaise) {
       return new Response(
-        JSON.stringify({ error: "Amount is more than what is due.", amount_due: Number(due) }),
+        JSON.stringify({ error: "Amount is more than what is due.", amount_due: duePaise / 100 }),
         { status: 409, headers: { ...corsHeaders, "Content-Type": "application/json" } }
       );
     }
 
-    const amountInPaise = Math.round(Number(amount) * 100);
     const receipt = `bkg_${String(booking_id).slice(-8)}_${crypto.randomUUID().slice(0, 12)}`;
 
     const auth = btoa(`${keyId}:${keySecret}`);

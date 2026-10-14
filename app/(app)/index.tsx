@@ -35,6 +35,7 @@ import {
   parseLocalDate,
 } from '../../src/services/bookingService';
 import type { BookingWithDetails } from '../../src/lib/database.types';
+import { RentalDeskStrip } from '../../src/components/rental/RentalDeskStrip';
 
 export default function OverviewScreen() {
   const { selectedStore } = useStoreSelectionStore();
@@ -195,6 +196,9 @@ export default function OverviewScreen() {
               </View>
             </View>
 
+
+            {/* ── Rental engine work (hidden when nothing to do) ───────── */}
+            <RentalDeskStrip storeId={storeId} context="overview" />
 
             {/* ── Rental Goal Progress ──────────────────────────────────── */}
             <View style={styles.goalCard}>

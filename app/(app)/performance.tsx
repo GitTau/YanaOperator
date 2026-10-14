@@ -37,6 +37,7 @@ import {
   type AppraisalCycle,
 } from '../../src/hooks/useQueries';
 import { useStoreSelectionStore } from '../../src/stores/storeSelectionStore';
+import { RentalDeskStrip } from '../../src/components/rental/RentalDeskStrip';
 import { parseLocalDate, formatLocalDate, completeCaptainTask } from '../../src/services/bookingService';
 
 // ── Helpers ───────────────────────────────────────────────────────────────────
@@ -555,6 +556,9 @@ export default function PerformanceScreen() {
             {/* ── Tab 1: Tasks ─────────────────────────────────────────── */}
             {activeSegment === 'tasks' && (
               <>
+                {/* Rental engine work for today (inspections, recoveries, returns) */}
+                <RentalDeskStrip storeId={storeId} context="tasks" />
+
                 {/* Today's Tasks Progress Card */}
                 {totalTodayTasks > 0 && (
                   <View style={styles.progressCard}>
