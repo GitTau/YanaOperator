@@ -235,6 +235,8 @@ export default function AppLayout() {
         <Tabs.Screen name="maintenance" options={{ href: null }} />
         {/* performance — hidden from tab bar, accessed via hamburger menu */}
         <Tabs.Screen name="performance" options={{ href: null }} />
+        {/* swap-requests — hidden from tab bar, opened from the hamburger menu or a swap-request notification */}
+        <Tabs.Screen name="swap-requests" options={{ href: null }} />
         {/* notifications — hidden from tab bar, accessed via hamburger menu & bell icon */}
         <Tabs.Screen name="notifications" options={{ href: null }} />
         {/* eod — hidden from tab bar, accessed via Operator button in header */}
