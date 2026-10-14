@@ -1,7 +1,8 @@
 // Generated from the live Supabase project (kaoelfcaiegjjhyrrlak), schema public, on 2026-10-14.
 // Command: supabase gen types typescript --linked --schema public
 // Do NOT edit by hand. Regenerate after any schema change (next due: after the lockdown
-// migrations A-C go live, which add collections, ecord_razorpay_payment, ooking_amount_due).
+// migrations A-C and I go live, which add collections, swap_requests, record_razorpay_payment,
+// booking_amount_due, request_asset_swap, decide_swap_request, rider_store_contact).
 // App-level domain types (Store, Vehicle, BookingWithDetails, ...) stay in ./database.types.ts.
 export type Json =
   | string

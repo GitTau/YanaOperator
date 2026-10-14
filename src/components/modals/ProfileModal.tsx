@@ -89,10 +89,10 @@ export function ProfileModal({
       const { data, error } = await supabase
         .from('audit_logs')
         .select('*')
-        .eq('store_id', storeId)
+        .eq('store_id', storeId as string)
         .gte('timestamp', startOfToday.toISOString());
       if (error) throw error;
-      return data ?? [];
+      return (data ?? []) as unknown as AuditLog[];
     },
     refetchInterval: 30000, // Poll every 30s
   });

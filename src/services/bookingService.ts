@@ -23,6 +23,7 @@ import type {
   CompleteJobCardParams,
   AdjustStoreInventoryParams,
   TransferStoreInventoryParams,
+  Database,
 } from '../lib/database.types';
 
 // ── Booking cutoff check ───────────────────────────────────────────────────────
@@ -901,7 +902,7 @@ export async function updateJobCardStatusService(
   diagnosis?: string | null,
   repairNotes?: string | null
 ): Promise<void> {
-  const updates: Record<string, any> = { status, updated_at: new Date().toISOString() };
+  const updates: Database['public']['Tables']['job_cards']['Update'] = { status, updated_at: new Date().toISOString() };
   if (diagnosis !== undefined) updates.diagnosis = diagnosis;
   if (repairNotes !== undefined) updates.repair_notes = repairNotes;
 

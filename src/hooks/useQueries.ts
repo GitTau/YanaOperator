@@ -6,7 +6,22 @@
 
 import React, { useEffect } from 'react';
 import { useQuery, useQueryClient } from '@tanstack/react-query';
-import type { Captain, JobCard, StoreInventory, PartCatalog } from '../lib/database.types';
+import type {
+  Battery,
+  BookingWithDetails,
+  Captain,
+  Charger,
+  Customer,
+  GlobalConfig,
+  JobCard,
+  PartCatalog,
+  Store,
+  StoreInventory,
+  Vehicle,
+} from '../lib/database.types';
+
+// The generated Database types describe nullable columns exactly; the screens work with the
+// app-level domain types. Each hook casts once, at the boundary where rows enter the app.
 import { supabase } from '../lib/supabase';
 import { useAuthStore } from '../stores/authStore';
 import {
@@ -56,7 +71,7 @@ export function useStores() {
         .select('*')
         .order('name');
       if (error) throw new Error(error.message);
-      return data;
+      return data as unknown as Store[];
     },
   });
 }
@@ -75,7 +90,7 @@ export function useVehicles(storeId: string | null) {
         .eq('store_id', storeId)
         .order('plate_number');
       if (error) throw new Error(error.message);
-      return data ?? [];
+      return (data ?? []) as unknown as Vehicle[];
     },
   });
 }
@@ -93,7 +108,7 @@ export function useBatteries(storeId: string | null) {
         .eq('store_id', storeId as string)
         .order('serial_number');
       if (error) throw new Error(error.message);
-      return data ?? [];
+      return (data ?? []) as unknown as Battery[];
     },
   });
 }
@@ -111,7 +126,7 @@ export function useChargers(storeId: string | null) {
         .eq('store_id', storeId as string)
         .order('serial_number');
       if (error) throw new Error(error.message);
-      return data ?? [];
+      return (data ?? []) as unknown as Charger[];
     },
   });
 }
@@ -129,7 +144,7 @@ export function useCustomers(storeId: string | null) {
         .eq('store_id', storeId as string)
         .order('name');
       if (error) throw new Error(error.message);
-      return data ?? [];
+      return (data ?? []) as unknown as Customer[];
     },
   });
 }
@@ -160,7 +175,7 @@ export function useBookings(storeId: string | null) {
         .or(`status.in.(Draft,Active,Paused),is_settled.eq.false,created_at.gte.${cutoff}`)
         .order('created_at', { ascending: false });
       if (error) throw new Error(error.message);
-      return data ?? [];
+      return (data ?? []) as unknown as BookingWithDetails[];
     },
   });
 }
@@ -229,7 +244,7 @@ export function useGlobalConfig() {
         .eq('id', 1)
         .single();
       if (error) throw new Error(error.message);
-      return data;
+      return data as unknown as GlobalConfig;
     },
   });
 }
@@ -281,7 +296,7 @@ export function useMaintenanceVehicles(storeId: string | null) {
         .in('status', ['Maintenance', 'Inactive'])
         .order('plate_number');
       if (error) throw new Error(error.message);
-      return data ?? [];
+      return (data ?? []) as unknown as Vehicle[];
     },
   });
 }
@@ -397,7 +412,8 @@ export function useTodayPaymentLogs(storeId: string | null) {
           amount: total,
           cashAmount: cash,
           onlineAmount: online,
-          timestamp: row.timestamp,
+          // audit_logs.timestamp defaults to now(); the gte filter above already excludes nulls.
+          timestamp: row.timestamp ?? startOfDayIst.toISOString(),
           bookingId,
         });
       }
