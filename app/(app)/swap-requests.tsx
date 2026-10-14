@@ -75,7 +75,8 @@ export default function SwapRequestsScreen() {
       : '';
     Alert.alert(
       `Approve ${kindLabel(r).toLowerCase()} swap?`,
-      `${r.riderName}: ${r.currentLabel ?? '—'} → ${r.requestedLabel ?? '—'}${faulty}`,
+      `${r.riderName}: ${r.currentLabel ?? '—'} → ${r.requestedLabel ?? '—'}${faulty}\n\n` +
+        'Swaps are done in person: check the rider is at your ZAP Point (within 10 m) before you approve.',
       [
         { text: 'Cancel', style: 'cancel' },
         { text: 'Approve', onPress: () => run(r, true) },
